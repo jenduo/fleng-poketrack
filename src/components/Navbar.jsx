@@ -15,6 +15,9 @@ function Navbar() {
           <NavLink to="/collection" className={({ isActive }) => isActive ? 'active' : ''}>
             Collection
           </NavLink>
+          <NavLink to="/binder" className={({ isActive }) => isActive ? 'active' : ''}>
+            Binder
+          </NavLink>
           <NavLink to="/wishlist" className={({ isActive }) => isActive ? 'active' : ''}>
             Wishlist
           </NavLink>
