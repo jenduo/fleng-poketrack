@@ -107,12 +107,15 @@ function Collection() {
     return cards
   }
 
+  const [csvImporting, setCsvImporting] = useState(false)
+
   const handleCSVUpload = async (event) => {
     const file = event.target.files[0]
     if (!file) return
 
     setImportError('')
     setImportSuccess('')
+    setCsvImporting(true)
 
     try {
       const text = await file.text()
@@ -180,7 +183,10 @@ function Collection() {
 
       event.target.value = ''
     } catch (error) {
-      setImportError(error.message)
+      console.error('CSV Import error:', error)
+      setImportError(error.message || 'Unknown error')
+    } finally {
+      setCsvImporting(false)
     }
   }
 
@@ -520,6 +526,7 @@ function Collection() {
             type="file"
             accept=".csv"
             onChange={handleCSVUpload}
+            disabled={csvImporting}
             style={{
               padding: '0.5rem',
               background: '#0d0d1a',
@@ -528,6 +535,9 @@ function Collection() {
               color: '#fff'
             }}
           />
+          {csvImporting && (
+            <p style={{ color: '#4dabf7', marginTop: '0.5rem' }}>Importing CSV...</p>
+          )}
           {importError && (
             <p style={{ color: '#ff6b6b', marginTop: '0.5rem' }}>{importError}</p>
           )}
