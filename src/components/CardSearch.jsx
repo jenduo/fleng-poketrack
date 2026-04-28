@@ -95,8 +95,9 @@ function CardSearch() {
   return (
     <div>
       <div className="page-header">
-        <h1>Search Cards</h1>
-        <p>Find Pokemon cards to add to your collection or wishlist</p>
+        <span className="kicker">// 04 Discover</span>
+        <h1>Search the catalog.</h1>
+        <p>Find cards to add to your collection or wantlist.</p>
       </div>
 
       <div className="search-container">

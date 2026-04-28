@@ -22,8 +22,9 @@ function Dashboard() {
   return (
     <div>
       <div className="page-header">
-        <h1>Dashboard</h1>
-        <p>Overview of your Pokemon card collection</p>
+        <span className="kicker">// 00 Index</span>
+        <h1>The collection at a glance.</h1>
+        <p>Inventory, holdings, and recent acquisitions.</p>
       </div>
 
       <div className="stats-grid">
@@ -32,25 +33,26 @@ function Dashboard() {
           <div className="stat-card-value">{totalCards}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">Unique Cards</div>
+          <div className="stat-card-label">Unique</div>
           <div className="stat-card-value">{cards.length}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">Sets Collected</div>
+          <div className="stat-card-label">Sets</div>
           <div className="stat-card-value">{uniqueSets}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">Collection Value</div>
+          <div className="stat-card-label">Portfolio Value</div>
           <div className="stat-card-value money">${totalValue.toFixed(2)}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">Wishlist Items</div>
+          <div className="stat-card-label">Wishlist</div>
           <div className="stat-card-value">{wishlist.length}</div>
         </div>
       </div>
 
       <div className="page-header">
-        <h2>Recent Additions</h2>
+        <span className="kicker">/ Recent</span>
+        <h2>Latest additions</h2>
       </div>
 
       {recentCards.length > 0 ? (

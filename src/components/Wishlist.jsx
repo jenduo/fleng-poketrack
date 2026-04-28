@@ -54,7 +54,8 @@ function Wishlist() {
   return (
     <div>
       <div className="page-header">
-        <h1>Wishlist</h1>
+        <span className="kicker">// 03 Wantlist</span>
+        <h1>Wishlist.</h1>
         <p>{wishlist.length} cards wanted</p>
       </div>
 

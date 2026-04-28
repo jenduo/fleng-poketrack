@@ -1,29 +1,32 @@
 import { NavLink } from 'react-router-dom'
 
+const links = [
+  { to: '/', label: 'Index', end: true },
+  { to: '/collection', label: 'Collection' },
+  { to: '/binder', label: 'Binder' },
+  { to: '/wishlist', label: 'Wishlist' },
+  { to: '/search', label: 'Search' },
+]
+
 function Navbar() {
   return (
     <nav className="navbar">
       <div className="navbar-content">
         <NavLink to="/" className="navbar-brand">
-          <img src="/fleng-poketrack/pokeball.svg" alt="PokeTrack" />
-          PokeTrack
+          <img src="/fleng-poketrack/pokeball.svg" alt="" />
+          poketrack
         </NavLink>
         <div className="navbar-links">
-          <NavLink to="/" className={({ isActive }) => isActive ? 'active' : ''} end>
-            Dashboard
-          </NavLink>
-          <NavLink to="/collection" className={({ isActive }) => isActive ? 'active' : ''}>
-            Collection
-          </NavLink>
-          <NavLink to="/binder" className={({ isActive }) => isActive ? 'active' : ''}>
-            Binder
-          </NavLink>
-          <NavLink to="/wishlist" className={({ isActive }) => isActive ? 'active' : ''}>
-            Wishlist
-          </NavLink>
-          <NavLink to="/search" className={({ isActive }) => isActive ? 'active' : ''}>
-            Search
-          </NavLink>
+          {links.map(l => (
+            <NavLink
+              key={l.to}
+              to={l.to}
+              end={l.end}
+              className={({ isActive }) => isActive ? 'active' : ''}
+            >
+              {l.label}
+            </NavLink>
+          ))}
         </div>
       </div>
     </nav>

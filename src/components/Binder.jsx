@@ -171,35 +171,62 @@ function Binder() {
         <div style={{
           width: '100%',
           height: '100%',
-          background: 'linear-gradient(135deg, #1a1a2e 0%, #0d0d1a 100%)',
+          background: 'radial-gradient(120% 80% at 50% 30%, rgba(155,126,255,0.10), transparent 60%), linear-gradient(180deg, #15151f 0%, #0b0b14 100%)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          borderRadius: '4px'
+          borderRadius: '3px',
+          border: '1px solid var(--rule)',
+          position: 'relative',
+          overflow: 'hidden'
         }}>
           <div style={{
-            fontSize: '2rem',
-            fontWeight: 'bold',
-            color: '#646cff',
+            position: 'absolute', top: '1.25rem', left: '1.25rem',
+            fontFamily: 'var(--font-mono)', fontSize: '0.65rem',
+            letterSpacing: '0.22em', color: 'var(--fg-3)', textTransform: 'uppercase'
+          }}>// vol. 01</div>
+          <div style={{
+            position: 'absolute', top: '1.25rem', right: '1.25rem',
+            fontFamily: 'var(--font-mono)', fontSize: '0.65rem',
+            letterSpacing: '0.22em', color: 'var(--fg-3)'
+          }}>{TOTAL_SLOTS} slots</div>
+
+          <div style={{
+            fontFamily: 'var(--font-display)',
+            fontVariationSettings: '"opsz" 144, "SOFT" 50, "WONK" 1',
+            fontWeight: 400,
+            fontSize: 'clamp(2rem, 4.5vw, 3.2rem)',
+            color: 'var(--fg-0)',
             textAlign: 'center',
-            marginBottom: '0.5rem'
+            letterSpacing: '-0.03em',
+            lineHeight: 1.0
           }}>
-            PALMS OFF
+            Palms Off
           </div>
           <div style={{
-            fontSize: '1rem',
-            color: '#888',
-            textAlign: 'center'
+            fontFamily: 'var(--font-display)',
+            fontStyle: 'italic',
+            fontVariationSettings: '"opsz" 72',
+            fontWeight: 300,
+            fontSize: 'clamp(1.1rem, 2vw, 1.5rem)',
+            color: 'var(--accent-strong)',
+            marginTop: '0.15rem',
+            letterSpacing: '-0.01em'
           }}>
-            GAMING
+            Gaming
           </div>
+
           <div style={{
-            fontSize: '0.8rem',
-            color: '#555',
-            marginTop: '1rem'
+            width: '40px', height: '1px', background: 'var(--mint-line)',
+            margin: '1.25rem 0'
+          }} />
+
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: '0.7rem',
+            letterSpacing: '0.22em', color: 'var(--fg-2)', textTransform: 'uppercase'
           }}>
-            216 Card Binder
+            Pokémon · Archive
           </div>
         </div>
       )
@@ -208,10 +235,9 @@ function Binder() {
     if (pageContent === 'black') {
       return (
         <div style={{
-          width: '100%',
-          height: '100%',
-          background: '#0a0a0a',
-          borderRadius: '4px'
+          width: '100%', height: '100%',
+          background: 'var(--bg-ink)', borderRadius: '3px',
+          border: '1px solid var(--rule)'
         }} />
       )
     }
@@ -219,84 +245,101 @@ function Binder() {
     if (pageContent === null) {
       return (
         <div style={{
-          width: '100%',
-          height: '100%',
-          background: '#0d0d1a',
-          borderRadius: '4px'
+          width: '100%', height: '100%',
+          background: 'var(--bg-ink)', borderRadius: '3px',
+          border: '1px solid var(--rule)'
         }} />
       )
     }
 
-    // Regular page with slots
+    // Regular page with 9 slots
     return (
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: '6px',
+        gap: '8px',
         width: '100%',
         height: '100%',
-        padding: '8px',
-        background: '#0d0d1a',
-        borderRadius: '4px',
-        boxSizing: 'border-box'
+        padding: '12px',
+        background: 'var(--bg-ink)',
+        borderRadius: '3px',
+        border: '1px solid var(--rule)',
+        boxSizing: 'border-box',
+        position: 'relative'
       }}>
-        {pages[pageContent]?.map((card, slotIndex) => (
-          <div
-            key={slotIndex}
-            onDragOver={handleDragOver}
-            onDrop={() => handleDrop(pageContent, slotIndex)}
-            onClick={() => !card && draggedCard && handleDrop(pageContent, slotIndex)}
-            style={{
-              background: card ? 'transparent' : (draggedCard && !card ? '#252542' : '#1a1a2e'),
-              borderRadius: '4px',
-              border: card ? 'none' : (draggedCard ? '1px dashed #646cff' : '1px dashed #333'),
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              position: 'relative',
-              aspectRatio: '2.5/3.5',
-              overflow: 'hidden',
-              cursor: !card && draggedCard ? 'pointer' : 'default'
-            }}
-          >
-            {card ? (
-              <>
-                <img
-                  src={card.image_url}
-                  alt={card.product_name}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    borderRadius: '3px'
-                  }}
-                />
-                <button
-                  onClick={() => handleRemoveCard(pageContent, slotIndex)}
-                  style={{
-                    position: 'absolute',
-                    top: '2px',
-                    right: '2px',
-                    background: 'rgba(255,0,0,0.8)',
-                    border: 'none',
-                    borderRadius: '50%',
-                    width: '16px',
-                    height: '16px',
-                    cursor: 'pointer',
-                    color: 'white',
-                    fontSize: '10px',
-                    lineHeight: '1',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  ×
-                </button>
-              </>
-            ) : null}
-          </div>
-        ))}
+        <span style={{
+          position: 'absolute', bottom: '0.6rem', right: '0.85rem',
+          fontFamily: 'var(--font-mono)', fontSize: '0.6rem',
+          color: 'var(--fg-3)', letterSpacing: '0.18em'
+        }}>
+          {String(pageContent + 1).padStart(2, '0')}
+        </span>
+
+        {pages[pageContent]?.map((card, slotIndex) => {
+          const isHotDrop = !!draggedCard && !card
+          return (
+            <div
+              key={slotIndex}
+              onDragOver={handleDragOver}
+              onDrop={() => handleDrop(pageContent, slotIndex)}
+              onClick={() => !card && draggedCard && handleDrop(pageContent, slotIndex)}
+              style={{
+                background: card ? 'transparent' : (isHotDrop ? 'rgba(155,126,255,0.06)' : 'rgba(255,255,255,0.012)'),
+                borderRadius: '3px',
+                border: card
+                  ? '1px solid var(--rule-soft)'
+                  : (isHotDrop ? '1px dashed var(--accent)' : '1px dashed var(--rule)'),
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                position: 'relative',
+                aspectRatio: '2.5/3.5',
+                overflow: 'hidden',
+                cursor: isHotDrop ? 'pointer' : 'default',
+                transition: 'background 160ms ease, border-color 160ms ease'
+              }}
+            >
+              {card ? (
+                <>
+                  <img
+                    src={card.image_url}
+                    alt={card.product_name}
+                    style={{
+                      width: '100%', height: '100%',
+                      objectFit: 'cover', borderRadius: '2px'
+                    }}
+                  />
+                  <button
+                    onClick={() => handleRemoveCard(pageContent, slotIndex)}
+                    title="Remove card"
+                    aria-label="Remove card"
+                    style={{
+                      position: 'absolute',
+                      top: '4px', right: '4px',
+                      background: 'rgba(11,11,20,0.78)',
+                      backdropFilter: 'blur(6px)',
+                      WebkitBackdropFilter: 'blur(6px)',
+                      border: '1px solid var(--rule-strong)',
+                      borderRadius: '999px',
+                      width: '18px', height: '18px',
+                      cursor: 'pointer',
+                      color: 'var(--fg-1)',
+                      fontSize: '11px',
+                      lineHeight: 1,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      padding: 0,
+                      transition: 'color 160ms, border-color 160ms'
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--danger)'; e.currentTarget.style.borderColor = 'var(--danger)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--fg-1)'; e.currentTarget.style.borderColor = 'var(--rule-strong)' }}
+                  >
+                    ×
+                  </button>
+                </>
+              ) : null}
+            </div>
+          )
+        })}
       </div>
     )
   }
@@ -306,93 +349,164 @@ function Binder() {
   return (
     <div>
       <div className="page-header">
-        <h1>Virtual Binder</h1>
-        <p>{usedCount} / {TOTAL_SLOTS} slots filled | {availableCards.length} cards available</p>
+        <span className="kicker">// 02 Display</span>
+        <h1>The binder.</h1>
+        <p>{usedCount} / {TOTAL_SLOTS} slots filled · {availableCards.length} cards available</p>
         {saveStatus && (
-          <p style={{ color: saveStatus === 'Saved!' ? '#4ade80' : saveStatus === 'Error saving' ? '#ff6b6b' : '#888', fontSize: '0.9rem' }}>
-            {saveStatus}
+          <p style={{
+            color: saveStatus === 'Saved!' ? 'var(--mint)'
+              : saveStatus.startsWith('Error') ? 'var(--danger)'
+              : 'var(--fg-2)',
+            fontSize: '0.74rem',
+            fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            marginTop: '0.5rem'
+          }}>
+            ⏺ {saveStatus}
           </p>
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-        {/* Binder Book View */}
-        <div style={{ flex: '1', minWidth: '500px' }}>
-          {/* Navigation */}
+      <div className="binder-layout" style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1fr) 300px',
+        gap: '2rem',
+        alignItems: 'start'
+      }}>
+        {/* === Binder Book View === */}
+        <div>
+          {/* Pagination — labeled rail with progress */}
           <div style={{
             display: 'flex',
-            justifyContent: 'center',
             alignItems: 'center',
             gap: '1rem',
-            marginBottom: '1rem'
+            marginBottom: '1.25rem'
           }}>
             <button
-              className="btn btn-secondary"
+              className="btn btn-secondary btn-sm"
               onClick={() => setCurrentSpread(Math.max(0, currentSpread - 1))}
               disabled={currentSpread === 0}
+              aria-label="Previous spread"
             >
-              ← Previous
+              ← Prev
             </button>
-            <span style={{ minWidth: '120px', textAlign: 'center' }}>
-              {currentSpread === 0 ? 'Cover + Page 1' : `Pages ${currentSpread * 2}-${Math.min(currentSpread * 2 + 1, TOTAL_PAGES)}`}
-            </span>
+
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'baseline'
+              }}>
+                <span style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.68rem',
+                  letterSpacing: '0.18em',
+                  color: 'var(--fg-2)',
+                  textTransform: 'uppercase'
+                }}>
+                  {currentSpread === 0
+                    ? 'Cover + page 01'
+                    : `Pages ${String(currentSpread * 2).padStart(2, '0')} – ${String(Math.min(currentSpread * 2 + 1, TOTAL_PAGES)).padStart(2, '0')}`}
+                </span>
+                <span style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.65rem',
+                  letterSpacing: '0.16em',
+                  color: 'var(--fg-3)'
+                }}>
+                  {String(currentSpread + 1).padStart(2, '0')} / {String(totalSpreads).padStart(2, '0')}
+                </span>
+              </div>
+              <div style={{
+                width: '100%', height: '1px', background: 'var(--rule)', position: 'relative'
+              }}>
+                <div style={{
+                  position: 'absolute', left: 0, top: 0, bottom: 0,
+                  width: `${((currentSpread + 1) / totalSpreads) * 100}%`,
+                  background: 'var(--accent)',
+                  transition: 'width 240ms cubic-bezier(0.2, 0.7, 0.2, 1)'
+                }} />
+              </div>
+            </div>
+
             <button
-              className="btn btn-secondary"
+              className="btn btn-secondary btn-sm"
               onClick={() => setCurrentSpread(Math.min(totalSpreads - 1, currentSpread + 1))}
               disabled={currentSpread === totalSpreads - 1}
+              aria-label="Next spread"
             >
               Next →
             </button>
           </div>
 
-          {/* Book */}
+          {/* Book frame */}
           <div style={{
             display: 'flex',
-            background: '#2a2a3e',
-            borderRadius: '8px',
-            padding: '12px',
-            gap: '8px',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
+            background: 'var(--bg-1)',
+            border: '1px solid var(--rule)',
+            borderRadius: '6px',
+            padding: '14px',
+            gap: '10px',
+            boxShadow: '0 1px 0 rgba(255,255,255,0.025) inset, 0 24px 60px -32px rgba(0,0,0,0.7)'
           }}>
-            {/* Left Page */}
-            <div style={{
-              flex: 1,
-              aspectRatio: '3/4',
-              minHeight: '400px'
-            }}>
+            <div style={{ flex: 1, aspectRatio: '3/4', minHeight: '420px' }}>
               {renderPage(spread.left, spread.left)}
             </div>
 
             {/* Spine */}
             <div style={{
-              width: '4px',
-              background: 'linear-gradient(to bottom, #333, #222, #333)',
-              borderRadius: '2px'
+              width: '1px',
+              background: 'linear-gradient(to bottom, transparent 0%, var(--rule-strong) 20%, rgba(155,126,255,0.4) 50%, var(--rule-strong) 80%, transparent 100%)',
+              position: 'relative'
             }} />
 
-            {/* Right Page */}
-            <div style={{
-              flex: 1,
-              aspectRatio: '3/4',
-              minHeight: '400px'
-            }}>
+            <div style={{ flex: 1, aspectRatio: '3/4', minHeight: '420px' }}>
               {renderPage(spread.right, spread.right)}
             </div>
           </div>
         </div>
 
-        {/* Collection Sidebar */}
-        <div style={{ width: '280px' }}>
+        {/* === Sidebar — Available Cards === */}
+        <aside>
           <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '1rem'
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            marginBottom: '0.85rem'
           }}>
-            <h3 style={{ margin: 0 }}>Available Cards</h3>
+            <div>
+              <div style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.66rem',
+                letterSpacing: '0.22em',
+                color: 'var(--accent)',
+                textTransform: 'uppercase',
+                marginBottom: '0.3rem'
+              }}>// Queue</div>
+              <h2 style={{
+                margin: 0,
+                fontFamily: 'var(--font-display)',
+                fontWeight: 400,
+                fontVariationSettings: '"opsz" 72, "SOFT" 30',
+                fontSize: '1.25rem',
+                letterSpacing: '-0.015em',
+                color: 'var(--fg-0)'
+              }}>Available cards</h2>
+            </div>
             <button
-              className="btn btn-secondary btn-sm"
               onClick={() => setShowCollection(!showCollection)}
+              style={{
+                background: 'transparent',
+                border: '1px solid var(--rule-strong)',
+                color: 'var(--fg-1)',
+                padding: '0.32rem 0.65rem',
+                borderRadius: '3px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.65rem',
+                letterSpacing: '0.16em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                transition: 'all 160ms'
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--fg-2)'; e.currentTarget.style.color = 'var(--fg-0)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--rule-strong)'; e.currentTarget.style.color = 'var(--fg-1)' }}
             >
               {showCollection ? 'Hide' : 'Show'}
             </button>
@@ -400,76 +514,115 @@ function Binder() {
 
           {showCollection && (
             <div style={{
-              background: '#1a1a2e',
-              borderRadius: '8px',
-              padding: '10px'
+              background: 'var(--bg-1)',
+              border: '1px solid var(--rule)',
+              borderRadius: '4px',
+              padding: '12px'
             }}>
-              <input
-                type="text"
-                placeholder="Search cards..."
-                value={searchFilter}
-                onChange={(e) => setSearchFilter(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  marginBottom: '10px',
-                  borderRadius: '4px',
-                  border: '1px solid #333',
-                  background: '#0d0d1a',
-                  color: '#fff',
-                  fontSize: '0.9rem',
-                  boxSizing: 'border-box'
-                }}
-              />
-              <div style={{ maxHeight: '450px', overflowY: 'auto' }}>
-              {availableCards.length === 0 ? (
-                <p style={{ color: '#666', textAlign: 'center', padding: '2rem' }}>
-                  All cards are in the binder!
-                </p>
-              ) : (
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(2, 1fr)',
-                  gap: '6px'
-                }}>
-                  {availableCards.map((card) => {
-                    const isSelected = draggedCard && draggedCard.id === card.id
-                    return (
-                    <div
-                      key={card.id}
-                      draggable
-                      onDragStart={() => handleDragStart(card)}
-                      onClick={() => handleSelectCard(card)}
-                      style={{
-                        cursor: 'pointer',
-                        borderRadius: '4px',
-                        overflow: 'hidden',
-                        border: isSelected ? '2px solid #646cff' : '2px solid transparent',
-                        transform: isSelected ? 'scale(1.02)' : 'scale(1)',
-                        transition: 'border-color 0.2s, transform 0.2s',
-                        touchAction: 'manipulation'
-                      }}
-                    >
-                      <img
-                        src={card.image_url}
-                        alt={card.product_name}
-                        style={{
-                          width: '100%',
-                          aspectRatio: '2.5/3.5',
-                          objectFit: 'cover',
-                          display: 'block'
-                        }}
-                        draggable={false}
-                      />
-                    </div>
-                    )
-                  })}
-                </div>
-              )}
+              <div style={{ position: 'relative', marginBottom: '12px' }}>
+                <span style={{
+                  position: 'absolute', left: '0.7rem', top: '50%',
+                  transform: 'translateY(-50%)', color: 'var(--fg-3)',
+                  fontSize: '0.85rem', pointerEvents: 'none'
+                }}>⌕</span>
+                <input
+                  type="text"
+                  placeholder="Search…"
+                  value={searchFilter}
+                  onChange={(e) => setSearchFilter(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.55rem 0.7rem 0.55rem 1.85rem',
+                    borderRadius: '3px',
+                    border: '1px solid var(--rule)',
+                    background: 'var(--bg-2)',
+                    color: 'var(--fg-0)',
+                    fontSize: '0.85rem',
+                    fontFamily: 'var(--font-body)',
+                    boxSizing: 'border-box',
+                    outline: 'none',
+                    transition: 'border-color 160ms ease, box-shadow 160ms ease'
+                  }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent-line)'; e.currentTarget.style.boxShadow = '0 0 0 3px var(--accent-soft)' }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--rule)'; e.currentTarget.style.boxShadow = 'none' }}
+                />
+              </div>
+
+              {/* meta line */}
+              <div style={{
+                display: 'flex', justifyContent: 'space-between',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.62rem',
+                letterSpacing: '0.16em',
+                color: 'var(--fg-3)',
+                textTransform: 'uppercase',
+                marginBottom: '0.55rem',
+                padding: '0 0.1rem'
+              }}>
+                <span>{availableCards.length} card{availableCards.length === 1 ? '' : 's'}</span>
+                {draggedCard && <span style={{ color: 'var(--accent)' }}>● selected</span>}
+              </div>
+
+              <div style={{ maxHeight: '460px', overflowY: 'auto', paddingRight: '4px' }}>
+                {availableCards.length === 0 ? (
+                  <p style={{
+                    fontFamily: 'var(--font-display)',
+                    fontStyle: 'italic',
+                    color: 'var(--fg-2)',
+                    textAlign: 'center',
+                    padding: '2.5rem 1rem 1rem',
+                    fontSize: '1rem'
+                  }}>
+                    All cards are placed.
+                  </p>
+                ) : (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, 1fr)',
+                    gap: '8px'
+                  }}>
+                    {availableCards.map((card) => {
+                      const isSelected = draggedCard && draggedCard.id === card.id
+                      return (
+                        <div
+                          key={card.id}
+                          draggable
+                          onDragStart={() => handleDragStart(card)}
+                          onClick={() => handleSelectCard(card)}
+                          style={{
+                            cursor: 'pointer',
+                            borderRadius: '3px',
+                            overflow: 'hidden',
+                            border: isSelected ? '1px solid var(--accent)' : '1px solid var(--rule)',
+                            background: 'var(--bg-2)',
+                            transform: isSelected ? 'translateY(-1px)' : 'none',
+                            boxShadow: isSelected ? '0 0 0 2px var(--accent-soft)' : 'none',
+                            transition: 'border-color 160ms, transform 160ms, box-shadow 160ms',
+                            touchAction: 'manipulation'
+                          }}
+                          onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.borderColor = 'var(--rule-strong)' }}
+                          onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.borderColor = 'var(--rule)' }}
+                        >
+                          <img
+                            src={card.image_url}
+                            alt={card.product_name}
+                            style={{
+                              width: '100%',
+                              aspectRatio: '2.5/3.5',
+                              objectFit: 'cover',
+                              display: 'block'
+                            }}
+                            draggable={false}
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           )}
-        </div>
+        </aside>
       </div>
     </div>
   )
