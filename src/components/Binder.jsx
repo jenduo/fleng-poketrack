@@ -19,6 +19,17 @@ function Binder() {
   const [showCollection, setShowCollection] = useState(true)
   const [searchFilter, setSearchFilter] = useState('')
   const [saveStatus, setSaveStatus] = useState('')
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches
+  )
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mql = window.matchMedia('(max-width: 700px)')
+    const handler = (e) => setIsMobile(e.matches)
+    mql.addEventListener('change', handler)
+    return () => mql.removeEventListener('change', handler)
+  }, [])
 
   useEffect(() => {
     const loadData = async () => {
@@ -138,14 +149,16 @@ function Binder() {
       card.catalog_group?.toLowerCase().includes(searchFilter.toLowerCase()) ||
       card.card_number?.toLowerCase().includes(searchFilter.toLowerCase())
     )
-  const totalSpreads = Math.ceil(TOTAL_PAGES / 2) + 1 // +1 for cover spread
+  // On mobile we step page-by-page (cover + 24 pages = 25 spreads).
+  // On desktop we keep the two-page spread (cover + 12 spreads = 13).
+  const totalSpreads = isMobile ? TOTAL_PAGES + 1 : Math.ceil(TOTAL_PAGES / 2) + 1
 
   const getSpreadPages = () => {
-    if (currentSpread === 0) {
-      // Cover on left, first page with slots on right
-      return { left: 'cover', right: 0 }
+    if (isMobile) {
+      if (currentSpread === 0) return { left: 'cover', right: null }
+      return { left: currentSpread - 1, right: null }
     }
-    // After cover: pages 1-2, 3-4, etc.
+    if (currentSpread === 0) return { left: 'cover', right: 0 }
     const leftPageIndex = currentSpread * 2 - 1
     const rightPageIndex = leftPageIndex + 1
     return {
@@ -153,6 +166,12 @@ function Binder() {
       right: rightPageIndex < TOTAL_PAGES ? rightPageIndex : null
     }
   }
+
+  // Clamp the spread index when toggling between mobile/desktop layouts so we
+  // never end up on a non-existent spread after a resize.
+  useEffect(() => {
+    if (currentSpread >= totalSpreads) setCurrentSpread(totalSpreads - 1)
+  }, [isMobile, totalSpreads, currentSpread])
 
   const spread = getSpreadPages()
 
@@ -403,9 +422,11 @@ function Binder() {
                   color: 'var(--fg-2)',
                   textTransform: 'uppercase'
                 }}>
-                  {currentSpread === 0
-                    ? 'Cover + page 01'
-                    : `Pages ${String(currentSpread * 2).padStart(2, '0')} – ${String(Math.min(currentSpread * 2 + 1, TOTAL_PAGES)).padStart(2, '0')}`}
+                  {(() => {
+                    if (currentSpread === 0) return isMobile ? 'Cover' : 'Cover + page 01'
+                    if (isMobile) return `Page ${String(currentSpread).padStart(2, '0')}`
+                    return `Pages ${String(currentSpread * 2).padStart(2, '0')} – ${String(Math.min(currentSpread * 2 + 1, TOTAL_PAGES)).padStart(2, '0')}`
+                  })()}
                 </span>
                 <span style={{
                   fontFamily: 'var(--font-mono)',
@@ -441,27 +462,37 @@ function Binder() {
           {/* Book frame */}
           <div style={{
             display: 'flex',
+            justifyContent: 'center',
             background: 'var(--bg-1)',
             border: '1px solid var(--rule)',
             borderRadius: '6px',
-            padding: '14px',
+            padding: isMobile ? '10px' : '14px',
             gap: '10px',
             boxShadow: '0 1px 0 rgba(255,255,255,0.025) inset, 0 24px 60px -32px rgba(0,0,0,0.7)'
           }}>
-            <div style={{ flex: 1, aspectRatio: '3/4', minHeight: '420px' }}>
+            <div style={{
+              flex: 1,
+              aspectRatio: isMobile ? '5/7' : '3/4',
+              minHeight: isMobile ? '320px' : '420px',
+              maxWidth: isMobile ? '420px' : 'none'
+            }}>
               {renderPage(spread.left, spread.left)}
             </div>
 
-            {/* Spine */}
-            <div style={{
-              width: '1px',
-              background: 'linear-gradient(to bottom, transparent 0%, var(--rule-strong) 20%, rgba(155,126,255,0.4) 50%, var(--rule-strong) 80%, transparent 100%)',
-              position: 'relative'
-            }} />
+            {!isMobile && (
+              <>
+                {/* Spine */}
+                <div style={{
+                  width: '1px',
+                  background: 'linear-gradient(to bottom, transparent 0%, var(--rule-strong) 20%, rgba(155,126,255,0.4) 50%, var(--rule-strong) 80%, transparent 100%)',
+                  position: 'relative'
+                }} />
 
-            <div style={{ flex: 1, aspectRatio: '3/4', minHeight: '420px' }}>
-              {renderPage(spread.right, spread.right)}
-            </div>
+                <div style={{ flex: 1, aspectRatio: '3/4', minHeight: '420px' }}>
+                  {renderPage(spread.right, spread.right)}
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -578,7 +609,7 @@ function Binder() {
                 ) : (
                   <div style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(2, 1fr)',
+                    gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)',
                     gap: '8px'
                   }}>
                     {availableCards.map((card) => {
