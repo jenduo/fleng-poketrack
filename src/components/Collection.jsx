@@ -17,6 +17,7 @@ function Collection() {
   const [exchangeRate, setExchangeRate] = useState(1.55)
   const [showAutoImport, setShowAutoImport] = useState(false)
   const [profileUrl, setProfileUrl] = useState('')
+  const [authToken, setAuthToken] = useState('')
   const [autoImportProgress, setAutoImportProgress] = useState('')
 
   useEffect(() => {
@@ -196,91 +197,121 @@ function Collection() {
     setAutoImportProgress('Extracting profile ID...')
 
     try {
-      // Extract profile ID from URL
-      const urlMatch = profileUrl.match(/profile\/([a-f0-9-]+)/i)
-      if (!urlMatch) {
-        throw new Error('Invalid Collectr URL. Please paste the full profile URL.')
-      }
-      const profileId = urlMatch[1]
+      const tokenTrimmed = authToken.trim() || null
 
-      setAutoImportProgress('Fetching from Collectr API...')
-
-      // Call Cloud Function to fetch data
       const getCollectrProfile = httpsCallable(functions, 'getCollectrProfile')
+      const productToCard = (product, portfolioName) => ({
+        portfolio_name: portfolioName,
+        category: product.catalog_category_name || 'Pokemon',
+        catalog_group: product.catalog_group || '',
+        product_name: product.product_name || '',
+        card_number: product.card_number || '',
+        rarity: product.rarity || '',
+        variance: product.product_sub_type || '',
+        grade: product.grade_company || '',
+        card_condition: product.card_condition || '',
+        cost_paid: '0',
+        quantity: product.quantity || '1',
+        market_price: product.market_price || '0',
+        price_override: '0',
+        watchlist: false,
+        date_added: '',
+        notes: '',
+        image_url: product.image_url || null,
+        id: `${product.catalog_group}-${product.product_name}-${product.card_number}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      })
 
-      // Fetch all cards (may need multiple calls for large collections)
-      let allProducts = []
-      let offset = 0
-      const limit = 100
-      let totalCards = null
+      let grouped = {}
+      let totalCount = 0
 
-      while (true) {
-        setAutoImportProgress(`Fetching cards ${offset + 1}-${offset + limit}...`)
+      if (tokenTrimmed) {
+        // Owner mode: hit Collectr directly from the browser. The Cloud Function
+        // is blocked by AWS WAF when running from Google Cloud egress IPs, but
+        // Collectr's API allows CORS (* origin) so a browser fetch works.
+        const ownerUuid = (() => {
+          try {
+            const payload = JSON.parse(atob(tokenTrimmed.split('.')[1]))
+            return payload.username
+          } catch { return null }
+        })()
+        if (!ownerUuid) throw new Error('Could not decode UUID from token.')
 
-        const result = await getCollectrProfile({ profileId, offset, limit })
-        const data = result.data
-
-        if (totalCards === null) {
-          totalCards = parseInt(data.total_cards) || 0
+        const apiHeaders = {
+          accept: 'application/json, text/plain, */*',
+          authorization: tokenTrimmed
+        }
+        const apiGet = async (url) => {
+          const r = await fetch(url, { headers: apiHeaders })
+          if (!r.ok) throw new Error(`Collectr ${r.status}: ${(await r.text()).slice(0, 200)}`)
+          return r.json()
         }
 
-        if (data.products && data.products.length > 0) {
-          allProducts = [...allProducts, ...data.products]
-        }
+        setAutoImportProgress('Listing collections...')
+        const colsResp = await apiGet(`https://api-v2.getcollectr.com/accounts/${ownerUuid}/collections`)
+        const cols = colsResp.data || []
 
-        // Check if we have all cards
-        if (allProducts.length >= totalCards || !data.products || data.products.length < limit) {
-          break
+        for (const c of cols) {
+          let off = 0
+          const pageSize = 200
+          const items = []
+          while (true) {
+            setAutoImportProgress(`Fetching "${c.name}" (${items.length}+)...`)
+            const cidParam = c.id === ownerUuid ? '' : `&collectionId=${c.id}`
+            const url = `https://api-v2.getcollectr.com/collections/${ownerUuid}/products?limit=${pageSize}&offset=${off}&unstackedView=true${cidParam}`
+            const j = await apiGet(url)
+            const batch = j.data || []
+            items.push(...batch)
+            if (batch.length < pageSize) break
+            off += batch.length
+          }
+          grouped[c.name] = items.map(p => productToCard(p, c.name))
+          totalCount += items.length
         }
+      } else {
+        // Anonymous showcase mode (capped at ~30)
+        const uuidMatch = profileUrl.match(/profile\/([a-f0-9-]{36})/i)
+        const handleMatch = profileUrl.match(/profile\/@?([a-zA-Z0-9_-]+)/i)
+        const profileId = (uuidMatch && uuidMatch[1]) || (handleMatch && handleMatch[1])
+        if (!profileId) throw new Error('Invalid Collectr URL.')
 
-        offset += limit
+        let allProducts = []
+        let offset = 0
+        const limit = 100
+        let totalCards = null
+        while (true) {
+          setAutoImportProgress(`Fetching cards ${offset + 1}-${offset + limit}...`)
+          const result = await getCollectrProfile({ profileId, offset, limit })
+          const data = result.data
+          if (totalCards === null) totalCards = parseInt(data.total_cards) || 0
+          if (data.products && data.products.length > 0) allProducts = [...allProducts, ...data.products]
+          if (allProducts.length >= totalCards || !data.products || data.products.length < limit) break
+          offset += limit
+        }
+        grouped = { Main: allProducts.map(p => productToCard(p, 'Main')) }
+        totalCount = allProducts.length
       }
 
-      setAutoImportProgress(`Processing ${allProducts.length} cards...`)
+      setAutoImportProgress(`Processing ${totalCount} cards...`)
 
       // Save images to cache
       const newImages = {}
-      allProducts.forEach(product => {
-        if (product.image_url) {
-          const key = getImageKey(product.product_name, product.catalog_group)
-          newImages[key] = product.image_url
+      Object.values(grouped).flat().forEach(card => {
+        if (card.image_url) {
+          const key = getImageKey(card.product_name, card.catalog_group)
+          newImages[key] = card.image_url
         }
       })
-
       const updatedImageCache = { ...imageCache, ...newImages }
       await setDoc(doc(db, 'collectr_imports', 'image_cache'), { images: updatedImageCache })
       setImageCache(updatedImageCache)
-
-      // Group cards into Main collection
-      const grouped = {
-        Main: allProducts.map(product => ({
-          portfolio_name: 'Main',
-          category: product.catalog_category_name || 'Pokemon',
-          catalog_group: product.catalog_group || '',
-          product_name: product.product_name || '',
-          card_number: product.card_number || '',
-          rarity: product.rarity || '',
-          variance: product.product_sub_type || '',
-          grade: product.grade_company || '',
-          card_condition: product.card_condition || '',
-          cost_paid: '0',
-          quantity: product.quantity || '1',
-          market_price: product.market_price || '0',
-          price_override: '0',
-          watchlist: false,
-          date_added: '',
-          notes: '',
-          image_url: product.image_url || null,
-          id: `${product.catalog_group}-${product.product_name}-${product.card_number}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-        }))
-      }
 
       await setDoc(doc(db, 'collectr_imports', 'main'), { collections: grouped })
       setCollections(grouped)
       setShowAutoImport(false)
       setProfileUrl('')
+      setAuthToken('')
       setAutoImportProgress('')
-      setImportSuccess(`Imported ${allProducts.length} cards with images!`)
+      setImportSuccess(`Imported ${totalCount} cards across ${Object.keys(grouped).length} collection(s)!`)
     } catch (error) {
       console.error('Auto import error:', error)
       setImportError(error.message || 'Failed to fetch from Collectr')
@@ -394,7 +425,8 @@ function Collection() {
     return getAllCards()
       .filter(card =>
         card.product_name.toLowerCase().includes(filter.toLowerCase()) ||
-        card.catalog_group.toLowerCase().includes(filter.toLowerCase())
+        card.catalog_group.toLowerCase().includes(filter.toLowerCase()) ||
+        card.card_number?.toLowerCase().includes(filter.toLowerCase())
       )
       .sort((a, b) => (parseFloat(b.market_price) || 0) - (parseFloat(a.market_price) || 0))
   }
@@ -474,14 +506,49 @@ function Collection() {
           marginBottom: '2rem'
         }}>
           <h3 style={{ marginBottom: '1rem' }}>Auto Import from Collectr</h3>
-          <p style={{ marginBottom: '1rem', color: '#888', fontSize: '0.9rem' }}>
-            Paste your Collectr profile URL and we'll fetch all your cards automatically.
+          <p style={{ marginBottom: '0.75rem', color: '#888', fontSize: '0.9rem' }}>
+            <strong style={{ color: '#bbb' }}>With token:</strong> imports every collection in your account (full).<br/>
+            <strong style={{ color: '#bbb' }}>Without token:</strong> imports the public showcase only (~30 cards) — paste a profile URL.
           </p>
+
+          <details style={{
+            marginBottom: '1rem',
+            background: '#0d0d1a',
+            border: '1px solid #333',
+            borderRadius: '4px',
+            padding: '0.6rem 0.75rem',
+            fontSize: '0.85rem'
+          }}>
+            <summary style={{ cursor: 'pointer', color: '#bbb' }}>How to get your Collectr auth token</summary>
+            <ol style={{ marginTop: '0.6rem', paddingLeft: '1.2rem', color: '#aaa', lineHeight: 1.6 }}>
+              <li>Open <a href="https://app.getcollectr.com" target="_blank" rel="noreferrer" style={{ color: '#646cff' }}>app.getcollectr.com</a> and log in.</li>
+              <li>Open DevTools (F12 / Cmd+Opt+I) → <strong>Network</strong> tab.</li>
+              <li>Refresh the page. Click any request to <code>api-v2.getcollectr.com</code>.</li>
+              <li>Scroll to <strong>Request Headers</strong> and find <code>authorization</code>.</li>
+              <li>Copy the whole value and paste below.</li>
+            </ol>
+            <p style={{ color: '#888', marginTop: '0.6rem', marginBottom: '0.3rem' }}>It looks like this:</p>
+            <pre style={{
+              background: '#000',
+              padding: '0.6rem',
+              borderRadius: '4px',
+              overflowX: 'auto',
+              color: '#9cdcfe',
+              fontSize: '0.75rem',
+              margin: 0,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-all'
+            }}>{`authorization: eyJhbGciOiJIUzI1NiJ9.eyJ1c2VybmFtZSI6IjZlMzMwNmQ5LTU1MmItNDI0Ny05ZDM5LTJmY2M5MjU2YmI1NSIsImRhdGUiOiIyMDI2LTAzLTAzVDAyOjM3OjMwLjQzM1oifQ.P-7rD-rt7FFRISFdUpzzpPrZC3YFgNi1QA2lcyZhy0I`}</pre>
+            <p style={{ color: '#666', marginTop: '0.5rem', fontSize: '0.8rem' }}>
+              Three dot-separated chunks starting with <code>eyJ</code>. Paste only the value — no <code>Bearer</code> prefix, no <code>authorization:</code> label.
+            </p>
+          </details>
+
           <input
             type="text"
             value={profileUrl}
             onChange={(e) => setProfileUrl(e.target.value)}
-            placeholder="https://app.getcollectr.com/showcase/profile/..."
+            placeholder="(only for showcase mode) https://app.getcollectr.com/showcase/profile/@handle"
             style={{
               width: '100%',
               padding: '0.75rem',
@@ -490,8 +557,26 @@ function Collection() {
               background: '#0d0d1a',
               color: '#fff',
               fontSize: '0.9rem',
-              marginBottom: '1rem',
+              marginBottom: '0.75rem',
               boxSizing: 'border-box'
+            }}
+          />
+          <input
+            type="password"
+            value={authToken}
+            onChange={(e) => setAuthToken(e.target.value)}
+            placeholder="eyJhbGciOi... (paste your Collectr auth token here)"
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              borderRadius: '4px',
+              border: '1px solid #333',
+              background: '#0d0d1a',
+              color: '#fff',
+              fontSize: '0.85rem',
+              marginBottom: '1rem',
+              boxSizing: 'border-box',
+              fontFamily: 'monospace'
             }}
           />
           {autoImportProgress && (
@@ -503,9 +588,9 @@ function Collection() {
           <button
             className="btn btn-primary"
             onClick={handleAutoImport}
-            disabled={!profileUrl.trim() || !!autoImportProgress}
+            disabled={(!profileUrl.trim() && !authToken.trim()) || !!autoImportProgress}
           >
-            {autoImportProgress ? 'Importing...' : 'Import'}
+            {autoImportProgress ? 'Importing...' : (authToken.trim() ? 'Import All Collections' : 'Import Showcase')}
           </button>
         </div>
       )}
@@ -603,6 +688,13 @@ function Collection() {
                 {name} ({collections[name].length})
               </button>
             ))}
+            <button
+              className="btn btn-secondary"
+              onClick={handleDeleteAll}
+              style={{ fontSize: '0.8rem', background: '#3a1f1f', color: '#ff8a8a' }}
+            >
+              Delete All
+            </button>
           </div>
         </div>
       )}
@@ -629,7 +721,7 @@ function Collection() {
       ) : (
         <div className="cards-grid">
           {filteredCards.map(card => (
-            <div key={card.id} className="pokemon-card">
+            <div key={card.id} className="pokemon-card" style={{ position: 'relative' }}>
               {card.image_url ? (
                 <img src={card.image_url} alt={card.product_name} />
               ) : (

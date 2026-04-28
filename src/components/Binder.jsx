@@ -97,6 +97,10 @@ function Binder() {
     e.preventDefault()
   }
 
+  const handleSelectCard = (card) => {
+    setDraggedCard(prev => (prev && prev.id === card.id ? null : card))
+  }
+
   const handleDrop = (pageIndex, slotIndex) => {
     if (!draggedCard) return
 
@@ -131,7 +135,8 @@ function Binder() {
     .filter(card =>
       searchFilter === '' ||
       card.product_name?.toLowerCase().includes(searchFilter.toLowerCase()) ||
-      card.catalog_group?.toLowerCase().includes(searchFilter.toLowerCase())
+      card.catalog_group?.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      card.card_number?.toLowerCase().includes(searchFilter.toLowerCase())
     )
   const totalSpreads = Math.ceil(TOTAL_PAGES / 2) + 1 // +1 for cover spread
 
@@ -240,16 +245,18 @@ function Binder() {
             key={slotIndex}
             onDragOver={handleDragOver}
             onDrop={() => handleDrop(pageContent, slotIndex)}
+            onClick={() => !card && draggedCard && handleDrop(pageContent, slotIndex)}
             style={{
-              background: card ? 'transparent' : '#1a1a2e',
+              background: card ? 'transparent' : (draggedCard && !card ? '#252542' : '#1a1a2e'),
               borderRadius: '4px',
-              border: card ? 'none' : '1px dashed #333',
+              border: card ? 'none' : (draggedCard ? '1px dashed #646cff' : '1px dashed #333'),
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               position: 'relative',
               aspectRatio: '2.5/3.5',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              cursor: !card && draggedCard ? 'pointer' : 'default'
             }}
           >
             {card ? (
@@ -425,25 +432,22 @@ function Binder() {
                   gridTemplateColumns: 'repeat(2, 1fr)',
                   gap: '6px'
                 }}>
-                  {availableCards.map((card) => (
+                  {availableCards.map((card) => {
+                    const isSelected = draggedCard && draggedCard.id === card.id
+                    return (
                     <div
                       key={card.id}
                       draggable
                       onDragStart={() => handleDragStart(card)}
+                      onClick={() => handleSelectCard(card)}
                       style={{
-                        cursor: 'grab',
+                        cursor: 'pointer',
                         borderRadius: '4px',
                         overflow: 'hidden',
-                        border: '2px solid transparent',
-                        transition: 'border-color 0.2s, transform 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = '#646cff'
-                        e.currentTarget.style.transform = 'scale(1.02)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = 'transparent'
-                        e.currentTarget.style.transform = 'scale(1)'
+                        border: isSelected ? '2px solid #646cff' : '2px solid transparent',
+                        transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+                        transition: 'border-color 0.2s, transform 0.2s',
+                        touchAction: 'manipulation'
                       }}
                     >
                       <img
@@ -458,7 +462,8 @@ function Binder() {
                         draggable={false}
                       />
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
               </div>
