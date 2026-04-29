@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/fleng-poketrack/pokeball.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PokeTrack — Archive</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,300..900,0..100,0..1&family=Geist:wght@300..700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script>
+      // GitHub Pages SPA fallback. Preserve the full path/query/hash, then
+      // hand back to index.html which boots the React Router on the right route.
+      (function () {
+        var basePath = '/fleng-poketrack/';
+        var path = window.location.pathname;
+        var search = window.location.search;
+        var hash = window.location.hash;
+
+        if (path.indexOf(basePath) === 0) {
+          var route = path.slice(basePath.length);
+          var newUrl = basePath + '?p=' + encodeURIComponent('/' + route) +
+            (search ? '&q=' + encodeURIComponent(search.slice(1)) : '') +
+            hash;
+          window.location.replace(newUrl);
+        } else {
+          window.location.replace(basePath);
+        }
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>
