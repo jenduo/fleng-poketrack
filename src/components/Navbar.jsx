@@ -4,6 +4,7 @@ const links = [
   { to: '/', label: 'Index', end: true },
   { to: '/collection', label: 'Collection' },
   { to: '/binder', label: 'Binder' },
+  { to: '/binder-beta', label: 'Binder β' },
   { to: '/wishlist', label: 'Wishlist' },
   { to: '/search', label: 'Search' },
 ]

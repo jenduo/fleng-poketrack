@@ -6,6 +6,7 @@ import Collection from './components/Collection'
 import Wishlist from './components/Wishlist'
 import CardSearch from './components/CardSearch'
 import Binder from './components/Binder'
+import BinderBeta from './components/BinderBeta'
 import Login from './components/Login'
 
 function App() {
@@ -25,6 +26,7 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/collection" element={<Collection />} />
           <Route path="/binder" element={<Binder />} />
+          <Route path="/binder-beta" element={<BinderBeta />} />
           <Route path="/wishlist" element={<Wishlist />} />
           <Route path="/search" element={<CardSearch />} />
         </Routes>
