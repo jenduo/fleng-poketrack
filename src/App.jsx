@@ -3,8 +3,6 @@ import { Routes, Route } from 'react-router-dom'
 import Navbar from './components/Navbar'
 import Dashboard from './components/Dashboard'
 import Collection from './components/Collection'
-import Wishlist from './components/Wishlist'
-import CardSearch from './components/CardSearch'
 import Binder from './components/Binder'
 import BinderBeta from './components/BinderBeta'
 import CardDetail from './components/CardDetail'
@@ -29,8 +27,6 @@ function App() {
           <Route path="/binder" element={<Binder />} />
           <Route path="/binder-beta" element={<BinderBeta />} />
           <Route path="/card/:productId" element={<CardDetail />} />
-          <Route path="/wishlist" element={<Wishlist />} />
-          <Route path="/search" element={<CardSearch />} />
         </Routes>
       </main>
     </div>

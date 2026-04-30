@@ -1,12 +1,17 @@
 import { NavLink } from 'react-router-dom'
 
 const links = [
-  { to: '/', label: 'Index', end: true },
+  { to: '/', label: 'Dashboard', end: true },
   { to: '/collection', label: 'Collection' },
   { to: '/binder', label: 'Binder' },
-  { to: '/binder-beta', label: 'Binder β' },
-  { to: '/wishlist', label: 'Wishlist' },
-  { to: '/search', label: 'Search' },
+  {
+    to: '/binder-beta',
+    label: (
+      <>
+        Playground <span className="beta-badge">[beta]</span>
+      </>
+    )
+  },
 ]
 
 function Navbar() {
@@ -15,7 +20,7 @@ function Navbar() {
       <div className="navbar-content">
         <NavLink to="/" className="navbar-brand">
           <img src="/fleng-poketrack/pokeball.svg" alt="" />
-          poketrack
+          PokeTrack
         </NavLink>
         <div className="navbar-links">
           {links.map(l => (

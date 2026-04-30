@@ -199,6 +199,18 @@ function CardDetail() {
 
   const totalQty = ownedEntries.reduce((s, c) => s + (parseInt(c.quantity) || 1), 0)
 
+  // Gain = graded_price_AUD − $50 grading fee − current raw market AUD.
+  const GRADING_FEE_AUD = 50
+  const lastAUDForGrade = (gradeId) => {
+    const s = priceSeries.find(p => String(p.gradeId) === String(gradeId))
+    if (!s?.points?.length) return null
+    return s.points[s.points.length - 1].y * exchangeRate
+  }
+  const psa10AUD = lastAUDForGrade('12')
+  const psa9AUD = lastAUDForGrade('11')
+  const psa10Gain = psa10AUD != null ? psa10AUD - GRADING_FEE_AUD - priceAUD : null
+  const psa9Gain = psa9AUD != null ? psa9AUD - GRADING_FEE_AUD - priceAUD : null
+
   return (
     <div>
       <div style={{ marginBottom: '1.25rem' }}>
@@ -210,14 +222,9 @@ function CardDetail() {
         </button>
       </div>
 
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 320px) minmax(0, 1fr)',
-        gap: '2rem',
-        alignItems: 'start'
-      }}>
+      <div className="card-detail-layout">
         {/* === Hero image === */}
-        <div>
+        <div className="card-detail-hero">
           <div style={{
             width: '100%',
             borderRadius: '6%',
@@ -274,42 +281,112 @@ function CardDetail() {
             </p>
           </div>
 
-          {/* === Price block === */}
-          <div style={{
-            background: 'var(--bg-1)',
-            border: '1px solid var(--rule)',
-            borderRadius: '6px',
-            padding: '1.1rem 1.25rem',
-            marginBottom: '1.5rem'
-          }}>
+          {/* === Price + PSA 10 gain (side by side) === */}
+          <div className="card-detail-stat-row">
             <div style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.62rem',
-              letterSpacing: '0.22em',
-              color: 'var(--accent)',
-              textTransform: 'uppercase',
-              marginBottom: '0.4rem'
-            }}>// Market</div>
-            <div style={{
-              display: 'flex', alignItems: 'baseline',
-              gap: '0.6rem', flexWrap: 'wrap'
+              background: 'var(--bg-1)',
+              border: '1px solid var(--rule)',
+              borderRadius: '6px',
+              padding: '1.1rem 1.25rem'
             }}>
-              <span style={{
-                fontFamily: 'var(--font-display)',
-                fontVariationSettings: '"opsz" 144',
-                fontWeight: 500,
-                fontSize: '2.4rem',
-                color: 'var(--gold)',
-                letterSpacing: '-0.02em'
-              }}>{fmtMoney(priceAUD)}</span>
-              <span style={{ color: 'var(--fg-3)', fontSize: '0.78rem' }}>
-                US${priceUSD.toFixed(4)} · @ {exchangeRate.toFixed(4)}
-              </span>
+              <div style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.62rem',
+                letterSpacing: '0.22em',
+                color: 'var(--accent)',
+                textTransform: 'uppercase',
+                marginBottom: '0.4rem'
+              }}>// Market</div>
+              <div style={{
+                display: 'flex', alignItems: 'baseline',
+                gap: '0.6rem', flexWrap: 'wrap'
+              }}>
+                <span style={{
+                  fontFamily: 'var(--font-display)',
+                  fontVariationSettings: '"opsz" 144',
+                  fontWeight: 500,
+                  fontSize: '2.4rem',
+                  color: 'var(--gold)',
+                  letterSpacing: '-0.02em'
+                }}>{fmtMoney(priceAUD)}</span>
+              </div>
+              {(diffUSD !== 0 || pct !== 0) && (
+                <div style={{ marginTop: '0.5rem', color: deltaColor, fontSize: '0.95rem' }}>
+                  {isUp ? '▲' : '▼'} {isUp ? '+' : '-'}{fmtMoney(diffAUD).slice(2)}
+                  {' '}({isUp ? '+' : '-'}{Math.abs(pct).toFixed(2)}%)
+                </div>
+              )}
             </div>
-            {(diffUSD !== 0 || pct !== 0) && (
-              <div style={{ marginTop: '0.5rem', color: deltaColor, fontSize: '0.95rem' }}>
-                {isUp ? '▲' : '▼'} {isUp ? '+' : '-'}{fmtMoney(diffAUD).slice(2)}
-                {' '}({isUp ? '+' : '-'}{Math.abs(pct).toFixed(2)}%)
+
+            {psa9Gain != null && (
+              <div style={{
+                background: 'var(--bg-1)',
+                border: '1px solid var(--rule)',
+                borderRadius: '6px',
+                padding: '1.1rem 1.25rem'
+              }}>
+                <div style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.62rem',
+                  letterSpacing: '0.22em',
+                  color: 'var(--accent)',
+                  textTransform: 'uppercase',
+                  marginBottom: '0.4rem'
+                }}>// Gain from PSA 9</div>
+                <div style={{
+                  display: 'flex', alignItems: 'baseline',
+                  gap: '0.6rem', flexWrap: 'wrap'
+                }}>
+                  <span
+                    className={psa9Gain >= 0 ? 'psa9-glow' : 'psa9-glow psa9-glow--neg'}
+                    style={{
+                      fontFamily: 'var(--font-display)',
+                      fontVariationSettings: '"opsz" 144',
+                      fontWeight: 500,
+                      fontSize: '2.4rem',
+                      color: psa9Gain >= 0 ? '#06d6a0' : 'var(--danger, #ff8a8a)',
+                      letterSpacing: '-0.02em'
+                    }}
+                  >
+                    {psa9Gain >= 0 ? '+' : '−'}{fmtMoney(Math.abs(psa9Gain))}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {psa10Gain != null && (
+              <div style={{
+                background: 'var(--bg-1)',
+                border: '1px solid var(--rule)',
+                borderRadius: '6px',
+                padding: '1.1rem 1.25rem'
+              }}>
+                <div style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.62rem',
+                  letterSpacing: '0.22em',
+                  color: 'var(--accent)',
+                  textTransform: 'uppercase',
+                  marginBottom: '0.4rem'
+                }}>// Gain from PSA 10</div>
+                <div style={{
+                  display: 'flex', alignItems: 'baseline',
+                  gap: '0.6rem', flexWrap: 'wrap'
+                }}>
+                  <span
+                    className={psa10Gain >= 0 ? 'psa10-glow' : 'psa10-glow psa10-glow--neg'}
+                    style={{
+                      fontFamily: 'var(--font-display)',
+                      fontVariationSettings: '"opsz" 144',
+                      fontWeight: 500,
+                      fontSize: '2.4rem',
+                      color: psa10Gain >= 0 ? '#86e1c0' : 'var(--danger, #ff8a8a)',
+                      letterSpacing: '-0.02em'
+                    }}
+                  >
+                    {psa10Gain >= 0 ? '+' : '−'}{fmtMoney(Math.abs(psa10Gain))}
+                  </span>
+                </div>
               </div>
             )}
           </div>
@@ -336,6 +413,7 @@ function CardDetail() {
                 markers={rawMarkers}
                 exchangeRate={exchangeRate}
                 gradeLabel={gradeFromId}
+                lockedLegend
               />
             </div>
           )}

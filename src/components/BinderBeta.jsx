@@ -17,9 +17,9 @@ function BinderBeta() {
   const [usedCardIds, setUsedCardIds] = useState(new Set())
   const [scratchCards, setScratchCards] = useState([])
   const [loading, setLoading] = useState(true)
-  const [draggedCard, setDraggedCard] = useState(null)
-  const [sourceSlot, setSourceSlot] = useState(null) // { pageIndex, slotIndex } when picked up from binder
-  const [sourceScratchId, setSourceScratchId] = useState(null) // card id when picked up from scratch
+  // selection: array of { card, source } where source is
+  //   { type: 'available' } | { type: 'scratch' } | { type: 'binder', pageIndex, slotIndex }
+  const [selection, setSelection] = useState([])
   const [showCollection, setShowCollection] = useState(true)
   const [showScratch, setShowScratch] = useState(true)
   const [searchFilter, setSearchFilter] = useState('')
@@ -95,84 +95,133 @@ function BinderBeta() {
     }
   }
 
-  const clearSelection = () => {
-    setDraggedCard(null)
-    setSourceSlot(null)
-    setSourceScratchId(null)
+  const clearSelection = () => setSelection([])
+  const hasSelection = selection.length > 0
+
+  const isInSelection = (cardId) => selection.some(s => s.card.id === cardId)
+  const isAvailableSelected = (cardId) =>
+    selection.some(s => s.card.id === cardId && s.source.type === 'available')
+  const isScratchSelected = (cardId) =>
+    selection.some(s => s.card.id === cardId && s.source.type === 'scratch')
+  const isBinderSelected = (pageIndex, slotIndex) =>
+    selection.some(s =>
+      s.source.type === 'binder' &&
+      s.source.pageIndex === pageIndex &&
+      s.source.slotIndex === slotIndex
+    )
+  const selectionHasNonScratch = selection.some(s => s.source.type !== 'scratch')
+  const selectionHasNonAvailable = selection.some(s => s.source.type !== 'available')
+
+  const toggleSelection = (card, source) => {
+    setSelection(prev => {
+      const sameIdx = prev.findIndex(s => {
+        if (s.card.id !== card.id) return false
+        if (s.source.type !== source.type) return false
+        if (source.type === 'binder') {
+          return s.source.pageIndex === source.pageIndex && s.source.slotIndex === source.slotIndex
+        }
+        return true
+      })
+      if (sameIdx >= 0) return prev.filter((_, i) => i !== sameIdx)
+      // Don't allow same card from two sources at once
+      const filtered = prev.filter(s => s.card.id !== card.id)
+      return [...filtered, { card, source }]
+    })
   }
 
-  const handleDragStart = (card) => {
-    setDraggedCard(card)
-    setSourceSlot(null)
-    setSourceScratchId(null)
-  }
   const handleDragOver = (e) => e.preventDefault()
-  const handleSelectCard = (card) => {
-    setDraggedCard(prev => (prev && prev.id === card.id ? null : card))
-    setSourceSlot(null)
-    setSourceScratchId(null)
-  }
 
+  const handleSelectCard = (card) => toggleSelection(card, { type: 'available' })
+  const handlePickupScratch = (cardId) => {
+    const card = scratchCards.find(c => c.id === cardId)
+    if (!card) return
+    toggleSelection(card, { type: 'scratch' })
+  }
   const handlePickupSlot = (pageIndex, slotIndex) => {
     const card = pages[pageIndex][slotIndex]
     if (!card) return
-    if (sourceSlot && sourceSlot.pageIndex === pageIndex && sourceSlot.slotIndex === slotIndex) {
-      clearSelection()
-      return
-    }
-    setDraggedCard(card)
-    setSourceSlot({ pageIndex, slotIndex })
-    setSourceScratchId(null)
+    toggleSelection(card, { type: 'binder', pageIndex, slotIndex })
   }
 
+  const handleDragStart = (card) => {
+    if (!isInSelection(card.id)) {
+      setSelection([{ card, source: { type: 'available' } }])
+    }
+  }
   const handleSlotDragStart = (pageIndex, slotIndex, e) => {
     const card = pages[pageIndex][slotIndex]
     if (!card) {
       if (e) e.preventDefault()
       return
     }
-    setDraggedCard(card)
-    setSourceSlot({ pageIndex, slotIndex })
-    setSourceScratchId(null)
-  }
-
-  const handlePickupScratch = (cardId) => {
-    const card = scratchCards.find(c => c.id === cardId)
-    if (!card) return
-    if (sourceScratchId === cardId) {
-      clearSelection()
-      return
+    if (!isBinderSelected(pageIndex, slotIndex)) {
+      setSelection([{ card, source: { type: 'binder', pageIndex, slotIndex } }])
     }
-    setDraggedCard(card)
-    setSourceScratchId(cardId)
-    setSourceSlot(null)
   }
-
   const handleScratchDragStart = (card, e) => {
     if (!card) {
       if (e) e.preventDefault()
       return
     }
-    setDraggedCard(card)
-    setSourceScratchId(card.id)
-    setSourceSlot(null)
+    if (!isScratchSelected(card.id)) {
+      setSelection([{ card, source: { type: 'scratch' } }])
+    }
   }
 
   const handleDrop = (pageIndex, slotIndex) => {
-    if (!draggedCard) return
-    if (pages[pageIndex][slotIndex] !== null) return
+    if (!hasSelection) return
+    // Drop target must be empty (or a slot that's in our selection — its card will move out)
+    if (pages[pageIndex][slotIndex] !== null && !isBinderSelected(pageIndex, slotIndex)) return
 
     const newPages = pages.map(page => [...page])
-    if (sourceSlot) {
-      newPages[sourceSlot.pageIndex][sourceSlot.slotIndex] = null
+    // Free up all binder source slots first so they count as empty
+    selection.forEach(s => {
+      if (s.source.type === 'binder') {
+        newPages[s.source.pageIndex][s.source.slotIndex] = null
+      }
+    })
+
+    // Build placement order:
+    //   1. Drop target slot (if empty)
+    //   2. Other empty slots on the drop page (in order)
+    //   3. Empty slots on subsequent pages (last resort, in page order)
+    const placement = []
+    if (newPages[pageIndex][slotIndex] === null) {
+      placement.push({ pageIndex, slotIndex })
     }
-    newPages[pageIndex][slotIndex] = draggedCard
+    for (let s = 0; s < SLOTS_PER_PAGE; s++) {
+      if (s === slotIndex) continue
+      if (newPages[pageIndex][s] === null) {
+        placement.push({ pageIndex, slotIndex: s })
+      }
+    }
+    for (let p = pageIndex + 1; p < TOTAL_PAGES; p++) {
+      for (let s = 0; s < SLOTS_PER_PAGE; s++) {
+        if (newPages[p][s] === null) {
+          placement.push({ pageIndex: p, slotIndex: s })
+        }
+      }
+    }
 
     const newUsedIds = new Set(usedCardIds)
-    newUsedIds.add(draggedCard.id)
+    const placedScratchIds = new Set()
+    selection.forEach((s, i) => {
+      if (i >= placement.length) return // overflow: card stays in source
+      const { pageIndex: tp, slotIndex: ts } = placement[i]
+      newPages[tp][ts] = s.card
+      newUsedIds.add(s.card.id)
+      if (s.source.type === 'scratch') placedScratchIds.add(s.card.id)
+    })
 
-    const newScratch = sourceScratchId
-      ? scratchCards.filter(c => c.id !== sourceScratchId)
+    // Cards that didn't get placed (overflow): re-add their binder source so they're not lost
+    selection.slice(placement.length).forEach(s => {
+      if (s.source.type === 'binder') {
+        newPages[s.source.pageIndex][s.source.slotIndex] = s.card
+      }
+    })
+
+    const newScratch = placedScratchIds.size > 0
+      ? scratchCards.filter(c => !placedScratchIds.has(c.id))
       : scratchCards
 
     saveBinder(newPages, newUsedIds, newScratch)
@@ -180,26 +229,52 @@ function BinderBeta() {
   }
 
   const handleDropToScratch = () => {
-    if (!draggedCard) return
-    // No-op if already from scratch
-    if (sourceScratchId) {
-      clearSelection()
-      return
-    }
-    // Don't add duplicates
-    if (scratchCards.some(c => c.id === draggedCard.id)) {
-      clearSelection()
-      return
-    }
-    const newScratch = [...scratchCards, draggedCard]
+    if (!hasSelection) return
+
+    const existingIds = new Set(scratchCards.map(c => c.id))
+    const additions = selection
+      .filter(s => s.source.type !== 'scratch' && !existingIds.has(s.card.id))
+      .map(s => s.card)
+    const newScratch = additions.length > 0 ? [...scratchCards, ...additions] : scratchCards
+
     let newPages = pages
     let newUsedIds = usedCardIds
-    if (sourceSlot) {
+    const binderSources = selection.filter(s => s.source.type === 'binder')
+    if (binderSources.length > 0) {
       newPages = pages.map(page => [...page])
-      newPages[sourceSlot.pageIndex][sourceSlot.slotIndex] = null
       newUsedIds = new Set(usedCardIds)
-      newUsedIds.delete(draggedCard.id)
+      binderSources.forEach(s => {
+        newPages[s.source.pageIndex][s.source.slotIndex] = null
+        newUsedIds.delete(s.card.id)
+      })
     }
+
+    saveBinder(newPages, newUsedIds, newScratch)
+    clearSelection()
+  }
+
+  const handleDropToAvailable = () => {
+    if (!hasSelection) return
+
+    let newPages = pages
+    let newUsedIds = usedCardIds
+    let newScratch = scratchCards
+
+    const binderSources = selection.filter(s => s.source.type === 'binder')
+    if (binderSources.length > 0) {
+      newPages = pages.map(page => [...page])
+      newUsedIds = new Set(usedCardIds)
+      binderSources.forEach(s => {
+        newPages[s.source.pageIndex][s.source.slotIndex] = null
+        newUsedIds.delete(s.card.id)
+      })
+    }
+    const scratchSources = selection.filter(s => s.source.type === 'scratch')
+    if (scratchSources.length > 0) {
+      const removeIds = new Set(scratchSources.map(s => s.card.id))
+      newScratch = scratchCards.filter(c => !removeIds.has(c.id))
+    }
+
     saveBinder(newPages, newUsedIds, newScratch)
     clearSelection()
   }
@@ -207,30 +282,9 @@ function BinderBeta() {
   const handleRemoveScratch = (cardId) => {
     const newScratch = scratchCards.filter(c => c.id !== cardId)
     saveBinder(pages, usedCardIds, newScratch)
-    if (sourceScratchId === cardId) clearSelection()
-  }
-
-  const handleDropToAvailable = () => {
-    if (!draggedCard) return
-    // No-op if neither in scratch nor binder (already in Available)
-    if (!sourceSlot && !sourceScratchId) {
-      clearSelection()
-      return
+    if (isScratchSelected(cardId)) {
+      setSelection(prev => prev.filter(s => !(s.card.id === cardId && s.source.type === 'scratch')))
     }
-    let newPages = pages
-    let newUsedIds = usedCardIds
-    let newScratch = scratchCards
-    if (sourceSlot) {
-      newPages = pages.map(page => [...page])
-      newPages[sourceSlot.pageIndex][sourceSlot.slotIndex] = null
-      newUsedIds = new Set(usedCardIds)
-      newUsedIds.delete(draggedCard.id)
-    }
-    if (sourceScratchId) {
-      newScratch = scratchCards.filter(c => c.id !== sourceScratchId)
-    }
-    saveBinder(newPages, newUsedIds, newScratch)
-    clearSelection()
   }
 
   const handleRemoveCard = (pageIndex, slotIndex) => {
@@ -363,9 +417,8 @@ function BinderBeta() {
         </span>
 
         {pages[pageContent]?.map((card, slotIndex) => {
-          const isHotDrop = !!draggedCard && !card
-          const isSourceSlot = !!card && sourceSlot &&
-            sourceSlot.pageIndex === pageContent && sourceSlot.slotIndex === slotIndex
+          const isHotDrop = hasSelection && !card
+          const isSourceSlot = !!card && isBinderSelected(pageContent, slotIndex)
           return (
             <div
               key={slotIndex}
@@ -376,7 +429,7 @@ function BinderBeta() {
               onClick={() => {
                 if (card) {
                   handlePickupSlot(pageContent, slotIndex)
-                } else if (draggedCard) {
+                } else if (hasSelection) {
                   handleDrop(pageContent, slotIndex)
                 }
               }}
@@ -621,8 +674,10 @@ function BinderBeta() {
             </div>
 
             {showScratch && (() => {
-              const isHotDrop = !!draggedCard && !sourceScratchId &&
-                !scratchCards.some(c => c.id === draggedCard.id)
+              const existingScratchIds = new Set(scratchCards.map(c => c.id))
+              const isHotDrop = hasSelection && selection.some(s =>
+                s.source.type !== 'scratch' && !existingScratchIds.has(s.card.id)
+              )
               return (
                 <div
                   onDragOver={handleDragOver}
@@ -665,17 +720,14 @@ function BinderBeta() {
                       Drag or click cards here to play with.
                     </p>
                   ) : (
-                    <div style={{
-                      display: 'flex',
-                      gap: '8px',
-                      overflowX: 'auto',
-                      overflowY: 'hidden',
-                      paddingBottom: '6px',
-                      scrollSnapType: 'x proximity',
-                      scrollbarWidth: 'thin'
-                    }}>
+                    <div style={{ maxHeight: '460px', overflowY: 'auto', paddingRight: '4px' }}>
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)',
+                        gap: '8px'
+                      }}>
                       {scratchCards.map((card) => {
-                        const isSelected = sourceScratchId === card.id
+                        const isSelected = isScratchSelected(card.id)
                         return (
                           <div
                             key={card.id}
@@ -684,9 +736,6 @@ function BinderBeta() {
                             onClick={(e) => { e.stopPropagation(); handlePickupScratch(card.id) }}
                             style={{
                               position: 'relative',
-                              flex: '0 0 auto',
-                              width: isMobile ? '92px' : '110px',
-                              scrollSnapAlign: 'start',
                               cursor: 'pointer',
                               borderRadius: '3px',
                               overflow: 'hidden',
@@ -739,6 +788,7 @@ function BinderBeta() {
                           </div>
                         )
                       })}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -748,7 +798,7 @@ function BinderBeta() {
 
           {/* === Available cards (also a drop target so cards can be dragged back to the queue) === */}
           {(() => {
-            const isAvailableHotDrop = !!draggedCard && (!!sourceSlot || !!sourceScratchId)
+            const isAvailableHotDrop = hasSelection && selectionHasNonAvailable
             return (
               <div
                 onDragOver={handleDragOver}
@@ -928,7 +978,15 @@ function BinderBeta() {
                 padding: '0 0.1rem'
               }}>
                 <span>{availableCards.length} card{availableCards.length === 1 ? '' : 's'}</span>
-                {draggedCard && <span style={{ color: 'var(--accent)' }}>● selected</span>}
+                {hasSelection && (
+                  <span
+                    onClick={clearSelection}
+                    title="Clear selection"
+                    style={{ color: 'var(--accent)', cursor: 'pointer' }}
+                  >
+                    ● {selection.length} selected · clear
+                  </span>
+                )}
               </div>
 
               <div style={{ maxHeight: '460px', overflowY: 'auto', paddingRight: '4px' }}>
@@ -950,7 +1008,7 @@ function BinderBeta() {
                     gap: '8px'
                   }}>
                     {availableCards.map((card) => {
-                      const isSelected = draggedCard && draggedCard.id === card.id
+                      const isSelected = isAvailableSelected(card.id)
                       return (
                         <div
                           key={card.id}

@@ -16,7 +16,7 @@ const COLLECTR_BASE = 'https://fleng-poketrack.jenniferduong-a.workers.dev/colle
 function Collection() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [filter, setFilter] = useState('')
-  const [sortBy, setSortBy] = useState('dateNewest')
+  const [sortBy, setSortBy] = useState('priceDesc')
   const [collections, setCollections] = useState({})
   const [selectedCollection, setSelectedCollection] = useState(searchParams.get('c') || 'Main')
   const [loading, setLoading] = useState(true)

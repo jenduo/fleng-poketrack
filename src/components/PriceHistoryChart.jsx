@@ -50,6 +50,10 @@ export function extractPriceSeries(history) {
 }
 
 const COLORS = ['#9b7eff', '#86e1c0', '#f5a623', '#ff6b6b', '#4dabf7', '#c9b6ff', '#ffd166', '#06d6a0', '#ef476f']
+const RAW_COLOR = '#86e1c0'
+
+const colorFor = (gradeId, fallbackIndex) =>
+  String(gradeId) === '52' ? RAW_COLOR : COLORS[fallbackIndex % COLORS.length]
 
 const DAY_MS = 86400000
 
@@ -86,9 +90,17 @@ const fmtDuration = (ms) => {
 
 const fmtMoney = (v) => `A$${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-function PriceHistoryChart({ series, markers = [], exchangeRate = 1, gradeLabel, height = 260 }) {
+function PriceHistoryChart({
+  series,
+  markers = [],
+  exchangeRate = 1,
+  gradeLabel,
+  height = 260,
+  lockedLegend = false,
+  defaultRange = '1M'
+}) {
   const [hidden, setHidden] = useState(() => new Set())
-  const [range, setRange] = useState('MAX')
+  const [range, setRange] = useState(defaultRange)
   const [hoverVx, setHoverVx] = useState(null)         // current hover viewBox x
   const [drag, setDrag] = useState(null)               // { startVx, currentVx } while pointer is held
   const [selection, setSelection] = useState(null)     // { startVx, endVx } locked after pointer up
@@ -303,12 +315,13 @@ function PriceHistoryChart({ series, markers = [], exchangeRate = 1, gradeLabel,
       </div>
 
       {/* Legend */}
+      {!lockedLegend && (
       <div style={{
         display: 'flex', flexWrap: 'wrap', gap: '0.55rem',
         marginBottom: '0.75rem'
       }}>
         {series.map((s, i) => {
-          const color = COLORS[i % COLORS.length]
+          const color = colorFor(s.gradeId, i)
           const label = gradeLabel(s.gradeId)
           const isHidden = hidden.has(String(s.gradeId))
           const lastPoint = s.points[s.points.length - 1]
@@ -349,6 +362,7 @@ function PriceHistoryChart({ series, markers = [], exchangeRate = 1, gradeLabel,
           )
         })}
       </div>
+      )}
 
       {/* Selection summary */}
       {selectionInfo && (
@@ -383,7 +397,7 @@ function PriceHistoryChart({ series, markers = [], exchangeRate = 1, gradeLabel,
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
             {selectionInfo.perSeries.map(({ s, deltaAUD, deltaPct, startAUD, endAUD }, i) => {
               const colorIndex = series.findIndex(x => String(x.gradeId) === String(s.gradeId))
-              const color = COLORS[colorIndex % COLORS.length]
+              const color = colorFor(s.gradeId, colorIndex)
               const up = deltaAUD >= 0
               const sign = up ? '+' : '−'
               const deltaColor = up ? 'var(--mint, #86e1c0)' : 'var(--danger, #ff6b6b)'
@@ -493,7 +507,7 @@ function PriceHistoryChart({ series, markers = [], exchangeRate = 1, gradeLabel,
               {/* Lines */}
               {visible.map((s) => {
                 const colorIndex = series.findIndex(x => String(x.gradeId) === String(s.gradeId))
-                const color = COLORS[colorIndex % COLORS.length]
+                const color = colorFor(s.gradeId, colorIndex)
                 const path = s.points.map((p, j) =>
                   `${j === 0 ? 'M' : 'L'} ${xScale(p.x).toFixed(2)} ${yScale(p.y).toFixed(2)}`
                 ).join(' ')
@@ -546,7 +560,7 @@ function PriceHistoryChart({ series, markers = [], exchangeRate = 1, gradeLabel,
                   />
                   {hoverInfo.perSeries.map(({ s, p }) => {
                     const colorIndex = series.findIndex(x => String(x.gradeId) === String(s.gradeId))
-                    const color = COLORS[colorIndex % COLORS.length]
+                    const color = colorFor(s.gradeId, colorIndex)
                     return (
                       <circle
                         key={String(s.gradeId)}
@@ -633,7 +647,7 @@ function PriceHistoryChart({ series, markers = [], exchangeRate = 1, gradeLabel,
                 </div>
                 {hoverInfo.perSeries.map(({ s, p }) => {
                   const colorIndex = series.findIndex(x => String(x.gradeId) === String(s.gradeId))
-                  const color = COLORS[colorIndex % COLORS.length]
+                  const color = colorFor(s.gradeId, colorIndex)
                   const label = gradeLabel(s.gradeId).label
                   return (
                     <div key={String(s.gradeId)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
