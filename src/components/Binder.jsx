@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { db } from '../firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { readCollectionsFromFirestore } from '../lib/collectrStorage'
 
 const TOTAL_SLOTS = 216
 const SLOTS_PER_PAGE = 9
@@ -16,6 +17,7 @@ function Binder() {
   const [usedCardIds, setUsedCardIds] = useState(new Set())
   const [loading, setLoading] = useState(true)
   const [draggedCard, setDraggedCard] = useState(null)
+  const [sourceSlot, setSourceSlot] = useState(null) // { pageIndex, slotIndex } when picked up from binder
   const [showCollection, setShowCollection] = useState(true)
   const [searchFilter, setSearchFilter] = useState('')
   const [saveStatus, setSaveStatus] = useState('')
@@ -50,14 +52,8 @@ function Binder() {
         }
 
         // Load collection (Main collection)
-        const collectionRef = doc(db, 'collectr_imports', 'main')
-        const collectionSnap = await getDoc(collectionRef)
-        if (collectionSnap.exists()) {
-          const collections = collectionSnap.data().collections || {}
-          setCollection(collections['Main'] || [])
-        } else {
-          setCollection([])
-        }
+        const collections = await readCollectionsFromFirestore()
+        setCollection(collections['Main'] || [])
       } catch (error) {
         console.error('Error loading data:', error)
         setCollection([])
@@ -102,6 +98,7 @@ function Binder() {
 
   const handleDragStart = (card) => {
     setDraggedCard(card)
+    setSourceSlot(null)
   }
 
   const handleDragOver = (e) => {
@@ -110,6 +107,30 @@ function Binder() {
 
   const handleSelectCard = (card) => {
     setDraggedCard(prev => (prev && prev.id === card.id ? null : card))
+    setSourceSlot(null)
+  }
+
+  const handlePickupSlot = (pageIndex, slotIndex) => {
+    const card = pages[pageIndex][slotIndex]
+    if (!card) return
+    // Click again on the same slot → cancel pickup
+    if (sourceSlot && sourceSlot.pageIndex === pageIndex && sourceSlot.slotIndex === slotIndex) {
+      setDraggedCard(null)
+      setSourceSlot(null)
+      return
+    }
+    setDraggedCard(card)
+    setSourceSlot({ pageIndex, slotIndex })
+  }
+
+  const handleSlotDragStart = (pageIndex, slotIndex, e) => {
+    const card = pages[pageIndex][slotIndex]
+    if (!card) {
+      if (e) e.preventDefault()
+      return
+    }
+    setDraggedCard(card)
+    setSourceSlot({ pageIndex, slotIndex })
   }
 
   const handleDrop = (pageIndex, slotIndex) => {
@@ -119,6 +140,9 @@ function Binder() {
     if (pages[pageIndex][slotIndex] !== null) return
 
     const newPages = pages.map(page => [...page])
+    if (sourceSlot) {
+      newPages[sourceSlot.pageIndex][sourceSlot.slotIndex] = null
+    }
     newPages[pageIndex][slotIndex] = draggedCard
 
     const newUsedIds = new Set(usedCardIds)
@@ -126,6 +150,7 @@ function Binder() {
 
     saveBinder(newPages, newUsedIds)
     setDraggedCard(null)
+    setSourceSlot(null)
   }
 
   const handleRemoveCard = (pageIndex, slotIndex) => {
@@ -296,26 +321,39 @@ function Binder() {
 
         {pages[pageContent]?.map((card, slotIndex) => {
           const isHotDrop = !!draggedCard && !card
+          const isSourceSlot = !!card && sourceSlot &&
+            sourceSlot.pageIndex === pageContent && sourceSlot.slotIndex === slotIndex
           return (
             <div
               key={slotIndex}
+              draggable={!!card}
+              onDragStart={(e) => handleSlotDragStart(pageContent, slotIndex, e)}
               onDragOver={handleDragOver}
               onDrop={() => handleDrop(pageContent, slotIndex)}
-              onClick={() => !card && draggedCard && handleDrop(pageContent, slotIndex)}
+              onClick={() => {
+                if (card) {
+                  handlePickupSlot(pageContent, slotIndex)
+                } else if (draggedCard) {
+                  handleDrop(pageContent, slotIndex)
+                }
+              }}
               style={{
                 background: card ? 'transparent' : (isHotDrop ? 'rgba(155,126,255,0.06)' : 'rgba(255,255,255,0.012)'),
                 borderRadius: '3px',
-                border: card
-                  ? '1px solid var(--rule-soft)'
-                  : (isHotDrop ? '1px dashed var(--accent)' : '1px dashed var(--rule)'),
+                border: isSourceSlot
+                  ? '1px dashed var(--accent)'
+                  : card
+                    ? '1px solid var(--rule-soft)'
+                    : (isHotDrop ? '1px dashed var(--accent)' : '1px dashed var(--rule)'),
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 position: 'relative',
                 aspectRatio: '2.5/3.5',
                 overflow: 'hidden',
-                cursor: isHotDrop ? 'pointer' : 'default',
-                transition: 'background 160ms ease, border-color 160ms ease'
+                cursor: card ? 'pointer' : (isHotDrop ? 'pointer' : 'default'),
+                opacity: isSourceSlot ? 0.4 : 1,
+                transition: 'background 160ms ease, border-color 160ms ease, opacity 160ms ease'
               }}
             >
               {card ? (
@@ -323,13 +361,14 @@ function Binder() {
                   <img
                     src={card.image_url}
                     alt={card.product_name}
+                    draggable={false}
                     style={{
                       width: '100%', height: '100%',
                       objectFit: 'cover', borderRadius: '2px'
                     }}
                   />
                   <button
-                    onClick={() => handleRemoveCard(pageContent, slotIndex)}
+                    onClick={(e) => { e.stopPropagation(); handleRemoveCard(pageContent, slotIndex) }}
                     title="Remove card"
                     aria-label="Remove card"
                     style={{

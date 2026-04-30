@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { db } from '../firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { readCollectionsFromFirestore } from '../lib/collectrStorage'
 
 const TOTAL_SLOTS = 216
 const SLOTS_PER_PAGE = 9
@@ -14,9 +15,13 @@ function BinderBeta() {
   const [collections, setCollections] = useState({})
   const [collectionIndex, setCollectionIndex] = useState(0)
   const [usedCardIds, setUsedCardIds] = useState(new Set())
+  const [scratchCards, setScratchCards] = useState([])
   const [loading, setLoading] = useState(true)
   const [draggedCard, setDraggedCard] = useState(null)
+  const [sourceSlot, setSourceSlot] = useState(null) // { pageIndex, slotIndex } when picked up from binder
+  const [sourceScratchId, setSourceScratchId] = useState(null) // card id when picked up from scratch
   const [showCollection, setShowCollection] = useState(true)
+  const [showScratch, setShowScratch] = useState(true)
   const [searchFilter, setSearchFilter] = useState('')
   const [saveStatus, setSaveStatus] = useState('')
   const [isMobile, setIsMobile] = useState(() =>
@@ -45,13 +50,10 @@ function BinderBeta() {
             setPages(pagesArray)
           }
           if (data.usedCardIds) setUsedCardIds(new Set(data.usedCardIds))
+          if (Array.isArray(data.scratchCards)) setScratchCards(data.scratchCards)
         }
 
-        const collectionRef = doc(db, 'collectr_imports', 'main')
-        const collectionSnap = await getDoc(collectionRef)
-        if (collectionSnap.exists()) {
-          setCollections(collectionSnap.data().collections || {})
-        }
+        setCollections(await readCollectionsFromFirestore())
       } catch (error) {
         console.error('Error loading data:', error)
       }
@@ -60,29 +62,30 @@ function BinderBeta() {
     loadData()
   }, [])
 
-  const saveBinder = async (newPages, newUsedIds) => {
+  const sanitizeCard = (card) => ({
+    id: card.id || null,
+    product_name: card.product_name || null,
+    image_url: card.image_url || null,
+    catalog_group: card.catalog_group || null,
+    variant: card.variant || null,
+    price: card.price || null
+  })
+
+  const saveBinder = async (newPages, newUsedIds, newScratch = scratchCards) => {
     setPages(newPages)
     setUsedCardIds(newUsedIds)
+    setScratchCards(newScratch)
     setSaveStatus('Saving...')
     try {
       const pagesObject = {}
       newPages.forEach((page, pageIndex) => {
-        pagesObject[`page_${pageIndex}`] = page.map(card => {
-          if (!card) return null
-          return {
-            id: card.id || null,
-            product_name: card.product_name || null,
-            image_url: card.image_url || null,
-            catalog_group: card.catalog_group || null,
-            variant: card.variant || null,
-            price: card.price || null
-          }
-        })
+        pagesObject[`page_${pageIndex}`] = page.map(card => card ? sanitizeCard(card) : null)
       })
 
       await setDoc(doc(db, 'binders', 'playground'), {
         pages: pagesObject,
-        usedCardIds: Array.from(newUsedIds)
+        usedCardIds: Array.from(newUsedIds),
+        scratchCards: newScratch.map(sanitizeCard)
       })
       setSaveStatus('Saved!')
       setTimeout(() => setSaveStatus(''), 2000)
@@ -92,10 +95,67 @@ function BinderBeta() {
     }
   }
 
-  const handleDragStart = (card) => setDraggedCard(card)
+  const clearSelection = () => {
+    setDraggedCard(null)
+    setSourceSlot(null)
+    setSourceScratchId(null)
+  }
+
+  const handleDragStart = (card) => {
+    setDraggedCard(card)
+    setSourceSlot(null)
+    setSourceScratchId(null)
+  }
   const handleDragOver = (e) => e.preventDefault()
   const handleSelectCard = (card) => {
     setDraggedCard(prev => (prev && prev.id === card.id ? null : card))
+    setSourceSlot(null)
+    setSourceScratchId(null)
+  }
+
+  const handlePickupSlot = (pageIndex, slotIndex) => {
+    const card = pages[pageIndex][slotIndex]
+    if (!card) return
+    if (sourceSlot && sourceSlot.pageIndex === pageIndex && sourceSlot.slotIndex === slotIndex) {
+      clearSelection()
+      return
+    }
+    setDraggedCard(card)
+    setSourceSlot({ pageIndex, slotIndex })
+    setSourceScratchId(null)
+  }
+
+  const handleSlotDragStart = (pageIndex, slotIndex, e) => {
+    const card = pages[pageIndex][slotIndex]
+    if (!card) {
+      if (e) e.preventDefault()
+      return
+    }
+    setDraggedCard(card)
+    setSourceSlot({ pageIndex, slotIndex })
+    setSourceScratchId(null)
+  }
+
+  const handlePickupScratch = (cardId) => {
+    const card = scratchCards.find(c => c.id === cardId)
+    if (!card) return
+    if (sourceScratchId === cardId) {
+      clearSelection()
+      return
+    }
+    setDraggedCard(card)
+    setSourceScratchId(cardId)
+    setSourceSlot(null)
+  }
+
+  const handleScratchDragStart = (card, e) => {
+    if (!card) {
+      if (e) e.preventDefault()
+      return
+    }
+    setDraggedCard(card)
+    setSourceScratchId(card.id)
+    setSourceSlot(null)
   }
 
   const handleDrop = (pageIndex, slotIndex) => {
@@ -103,13 +163,74 @@ function BinderBeta() {
     if (pages[pageIndex][slotIndex] !== null) return
 
     const newPages = pages.map(page => [...page])
+    if (sourceSlot) {
+      newPages[sourceSlot.pageIndex][sourceSlot.slotIndex] = null
+    }
     newPages[pageIndex][slotIndex] = draggedCard
 
     const newUsedIds = new Set(usedCardIds)
     newUsedIds.add(draggedCard.id)
 
-    saveBinder(newPages, newUsedIds)
-    setDraggedCard(null)
+    const newScratch = sourceScratchId
+      ? scratchCards.filter(c => c.id !== sourceScratchId)
+      : scratchCards
+
+    saveBinder(newPages, newUsedIds, newScratch)
+    clearSelection()
+  }
+
+  const handleDropToScratch = () => {
+    if (!draggedCard) return
+    // No-op if already from scratch
+    if (sourceScratchId) {
+      clearSelection()
+      return
+    }
+    // Don't add duplicates
+    if (scratchCards.some(c => c.id === draggedCard.id)) {
+      clearSelection()
+      return
+    }
+    const newScratch = [...scratchCards, draggedCard]
+    let newPages = pages
+    let newUsedIds = usedCardIds
+    if (sourceSlot) {
+      newPages = pages.map(page => [...page])
+      newPages[sourceSlot.pageIndex][sourceSlot.slotIndex] = null
+      newUsedIds = new Set(usedCardIds)
+      newUsedIds.delete(draggedCard.id)
+    }
+    saveBinder(newPages, newUsedIds, newScratch)
+    clearSelection()
+  }
+
+  const handleRemoveScratch = (cardId) => {
+    const newScratch = scratchCards.filter(c => c.id !== cardId)
+    saveBinder(pages, usedCardIds, newScratch)
+    if (sourceScratchId === cardId) clearSelection()
+  }
+
+  const handleDropToAvailable = () => {
+    if (!draggedCard) return
+    // No-op if neither in scratch nor binder (already in Available)
+    if (!sourceSlot && !sourceScratchId) {
+      clearSelection()
+      return
+    }
+    let newPages = pages
+    let newUsedIds = usedCardIds
+    let newScratch = scratchCards
+    if (sourceSlot) {
+      newPages = pages.map(page => [...page])
+      newPages[sourceSlot.pageIndex][sourceSlot.slotIndex] = null
+      newUsedIds = new Set(usedCardIds)
+      newUsedIds.delete(draggedCard.id)
+    }
+    if (sourceScratchId) {
+      newScratch = scratchCards.filter(c => c.id !== sourceScratchId)
+    }
+    saveBinder(newPages, newUsedIds, newScratch)
+    clearSelection()
   }
 
   const handleRemoveCard = (pageIndex, slotIndex) => {
@@ -159,8 +280,10 @@ function BinderBeta() {
     return collections[activeCollectionName] || []
   }, [collections, activeCollectionName])
 
+  const scratchIds = useMemo(() => new Set(scratchCards.map(c => c.id)), [scratchCards])
+
   const availableCards = activeCards
-    .filter(card => !usedCardIds.has(card.id))
+    .filter(card => !usedCardIds.has(card.id) && !scratchIds.has(card.id))
     .filter(card =>
       searchFilter === '' ||
       card.product_name?.toLowerCase().includes(searchFilter.toLowerCase()) ||
@@ -241,26 +364,39 @@ function BinderBeta() {
 
         {pages[pageContent]?.map((card, slotIndex) => {
           const isHotDrop = !!draggedCard && !card
+          const isSourceSlot = !!card && sourceSlot &&
+            sourceSlot.pageIndex === pageContent && sourceSlot.slotIndex === slotIndex
           return (
             <div
               key={slotIndex}
+              draggable={!!card}
+              onDragStart={(e) => handleSlotDragStart(pageContent, slotIndex, e)}
               onDragOver={handleDragOver}
               onDrop={() => handleDrop(pageContent, slotIndex)}
-              onClick={() => !card && draggedCard && handleDrop(pageContent, slotIndex)}
+              onClick={() => {
+                if (card) {
+                  handlePickupSlot(pageContent, slotIndex)
+                } else if (draggedCard) {
+                  handleDrop(pageContent, slotIndex)
+                }
+              }}
               style={{
                 background: card ? 'transparent' : (isHotDrop ? 'rgba(155,126,255,0.06)' : 'rgba(255,255,255,0.012)'),
                 borderRadius: '3px',
-                border: card
-                  ? '1px solid var(--rule-soft)'
-                  : (isHotDrop ? '1px dashed var(--accent)' : '1px dashed var(--rule)'),
+                border: isSourceSlot
+                  ? '1px dashed var(--accent)'
+                  : card
+                    ? '1px solid var(--rule-soft)'
+                    : (isHotDrop ? '1px dashed var(--accent)' : '1px dashed var(--rule)'),
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 position: 'relative',
                 aspectRatio: '2.5/3.5',
                 overflow: 'hidden',
-                cursor: isHotDrop ? 'pointer' : 'default',
-                transition: 'background 160ms ease, border-color 160ms ease'
+                cursor: card ? 'pointer' : (isHotDrop ? 'pointer' : 'default'),
+                opacity: isSourceSlot ? 0.4 : 1,
+                transition: 'background 160ms ease, border-color 160ms ease, opacity 160ms ease'
               }}
             >
               {card ? (
@@ -268,13 +404,14 @@ function BinderBeta() {
                   <img
                     src={card.image_url}
                     alt={card.product_name}
+                    draggable={false}
                     style={{
                       width: '100%', height: '100%',
                       objectFit: 'cover', borderRadius: '2px'
                     }}
                   />
                   <button
-                    onClick={() => handleRemoveCard(pageContent, slotIndex)}
+                    onClick={(e) => { e.stopPropagation(); handleRemoveCard(pageContent, slotIndex) }}
                     title="Remove card"
                     aria-label="Remove card"
                     style={{
@@ -436,6 +573,194 @@ function BinderBeta() {
         </div>
 
         <aside>
+          {/* === Scratch / Playground queue (on top) === */}
+          <div>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: '0.85rem'
+            }}>
+              <div>
+                <div style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.66rem',
+                  letterSpacing: '0.22em',
+                  color: 'var(--mint, #86e1c0)',
+                  textTransform: 'uppercase',
+                  marginBottom: '0.3rem'
+                }}>// Scratch</div>
+                <h2 style={{
+                  margin: 0,
+                  fontFamily: 'var(--font-display)',
+                  fontWeight: 400,
+                  fontVariationSettings: '"opsz" 72, "SOFT" 30',
+                  fontSize: '1.25rem',
+                  letterSpacing: '-0.015em',
+                  color: 'var(--fg-0)'
+                }}>Playing with</h2>
+              </div>
+              <button
+                onClick={() => setShowScratch(!showScratch)}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid var(--rule-strong)',
+                  color: 'var(--fg-1)',
+                  padding: '0.32rem 0.65rem',
+                  borderRadius: '3px',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.65rem',
+                  letterSpacing: '0.16em',
+                  textTransform: 'uppercase',
+                  cursor: 'pointer',
+                  transition: 'all 160ms'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--fg-2)'; e.currentTarget.style.color = 'var(--fg-0)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--rule-strong)'; e.currentTarget.style.color = 'var(--fg-1)' }}
+              >
+                {showScratch ? 'Hide' : 'Show'}
+              </button>
+            </div>
+
+            {showScratch && (() => {
+              const isHotDrop = !!draggedCard && !sourceScratchId &&
+                !scratchCards.some(c => c.id === draggedCard.id)
+              return (
+                <div
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => { e.preventDefault(); handleDropToScratch() }}
+                  onClick={() => { if (isHotDrop) handleDropToScratch() }}
+                  style={{
+                    background: isHotDrop ? 'rgba(134,225,192,0.05)' : 'var(--bg-1)',
+                    border: isHotDrop ? '1px dashed var(--mint, #86e1c0)' : '1px solid var(--rule)',
+                    borderRadius: '4px',
+                    padding: '12px',
+                    minHeight: '120px',
+                    cursor: isHotDrop ? 'pointer' : 'default',
+                    transition: 'background 160ms, border-color 160ms'
+                  }}
+                >
+                  <div style={{
+                    display: 'flex', justifyContent: 'space-between',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.62rem',
+                    letterSpacing: '0.16em',
+                    color: 'var(--fg-3)',
+                    textTransform: 'uppercase',
+                    marginBottom: '0.55rem',
+                    padding: '0 0.1rem'
+                  }}>
+                    <span>{scratchCards.length} card{scratchCards.length === 1 ? '' : 's'}</span>
+                    {isHotDrop && <span style={{ color: 'var(--mint, #86e1c0)' }}>↓ drop</span>}
+                  </div>
+
+                  {scratchCards.length === 0 ? (
+                    <p style={{
+                      fontFamily: 'var(--font-display)',
+                      fontStyle: 'italic',
+                      color: 'var(--fg-2)',
+                      textAlign: 'center',
+                      padding: '1.5rem 0.5rem',
+                      fontSize: '0.95rem',
+                      margin: 0
+                    }}>
+                      Drag or click cards here to play with.
+                    </p>
+                  ) : (
+                    <div style={{
+                      display: 'flex',
+                      gap: '8px',
+                      overflowX: 'auto',
+                      overflowY: 'hidden',
+                      paddingBottom: '6px',
+                      scrollSnapType: 'x proximity',
+                      scrollbarWidth: 'thin'
+                    }}>
+                      {scratchCards.map((card) => {
+                        const isSelected = sourceScratchId === card.id
+                        return (
+                          <div
+                            key={card.id}
+                            draggable
+                            onDragStart={(e) => handleScratchDragStart(card, e)}
+                            onClick={(e) => { e.stopPropagation(); handlePickupScratch(card.id) }}
+                            style={{
+                              position: 'relative',
+                              flex: '0 0 auto',
+                              width: isMobile ? '92px' : '110px',
+                              scrollSnapAlign: 'start',
+                              cursor: 'pointer',
+                              borderRadius: '3px',
+                              overflow: 'hidden',
+                              border: isSelected ? '1px solid var(--accent)' : '1px solid var(--rule)',
+                              background: 'var(--bg-2)',
+                              transform: isSelected ? 'translateY(-1px)' : 'none',
+                              boxShadow: isSelected ? '0 0 0 2px var(--accent-soft)' : 'none',
+                              opacity: isSelected ? 0.65 : 1,
+                              transition: 'border-color 160ms, transform 160ms, box-shadow 160ms, opacity 160ms',
+                              touchAction: 'manipulation'
+                            }}
+                          >
+                            <img
+                              src={card.image_url}
+                              alt={card.product_name}
+                              draggable={false}
+                              style={{
+                                width: '100%',
+                                aspectRatio: '2.5/3.5',
+                                objectFit: 'cover',
+                                display: 'block'
+                              }}
+                            />
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleRemoveScratch(card.id) }}
+                              title="Remove from scratch"
+                              aria-label="Remove from scratch"
+                              style={{
+                                position: 'absolute',
+                                top: '4px', right: '4px',
+                                background: 'rgba(11,11,20,0.78)',
+                                backdropFilter: 'blur(6px)',
+                                WebkitBackdropFilter: 'blur(6px)',
+                                border: '1px solid var(--rule-strong)',
+                                borderRadius: '999px',
+                                width: '18px', height: '18px',
+                                cursor: 'pointer',
+                                color: 'var(--fg-1)',
+                                fontSize: '11px',
+                                lineHeight: 1,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                padding: 0,
+                                transition: 'color 160ms, border-color 160ms'
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--danger)'; e.currentTarget.style.borderColor = 'var(--danger)' }}
+                              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--fg-1)'; e.currentTarget.style.borderColor = 'var(--rule-strong)' }}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+          </div>
+
+          {/* === Available cards (also a drop target so cards can be dragged back to the queue) === */}
+          {(() => {
+            const isAvailableHotDrop = !!draggedCard && (!!sourceSlot || !!sourceScratchId)
+            return (
+              <div
+                onDragOver={handleDragOver}
+                onDrop={(e) => { e.preventDefault(); handleDropToAvailable() }}
+                style={{
+                  marginTop: '1.25rem',
+                  borderRadius: '4px',
+                  outline: isAvailableHotDrop ? '1px dashed var(--accent)' : 'none',
+                  outlineOffset: '4px',
+                  transition: 'outline-color 160ms ease'
+                }}
+              >
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             marginBottom: '0.85rem'
@@ -665,6 +990,10 @@ function BinderBeta() {
               </div>
             </div>
           )}
+
+              </div>
+            )
+          })()}
         </aside>
       </div>
     </div>
