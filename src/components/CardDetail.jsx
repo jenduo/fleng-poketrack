@@ -414,6 +414,7 @@ function CardDetail() {
                 exchangeRate={exchangeRate}
                 gradeLabel={gradeFromId}
                 lockedLegend
+                height={400}
               />
             </div>
           )}
@@ -439,6 +440,7 @@ function CardDetail() {
                 markers={psaMarkers}
                 exchangeRate={exchangeRate}
                 gradeLabel={gradeFromId}
+                height={400}
               />
             </div>
           )}
