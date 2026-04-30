@@ -875,3 +875,8 @@ a:hover { color: var(--fg-0); }
 
   .page-header h1 { font-size: 2rem; }
 }
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
