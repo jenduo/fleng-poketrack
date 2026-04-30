@@ -12,7 +12,7 @@
 
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
-  'https://jenduong.github.io',
+  'https://jenduo.github.io',
 ]
 
 const corsHeaders = (origin) => ({
