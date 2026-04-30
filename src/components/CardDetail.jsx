@@ -6,6 +6,10 @@ import { readCollectionsFromFirestore } from '../lib/collectrStorage'
 import { gradeFromCard, gradeFromId } from '../lib/grades'
 import PriceHistoryChart, { extractPriceSeries } from './PriceHistoryChart'
 
+// Routes through the Cloudflare Worker proxy (sets Origin/Referer that
+// Collectr's CloudFront expects).
+const COLLECTR_BASE = 'https://fleng-poketrack.jenniferduong-a.workers.dev/collectr'
+
 const fmtMoney = (v) =>
   v == null ? '—'
   : `A$${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -71,7 +75,7 @@ function CardDetail() {
 
     setLiveLoading(true)
     setLiveError('')
-    fetch(`https://api-v2.getcollectr.com/collections/${ownerUuid}/products/${productId}?currency=USD&details=true`, {
+    fetch(`${COLLECTR_BASE}/collections/${ownerUuid}/products/${productId}?currency=USD&details=true`, {
       headers: {
         accept: 'application/json, text/plain, */*',
         authorization: savedToken

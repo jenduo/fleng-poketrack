@@ -9,6 +9,10 @@ import {
 } from '../lib/collectrStorage'
 import { gradeFromCard } from '../lib/grades'
 
+// Collectr's API rejects requests whose Origin isn't app.getcollectr.com,
+// so we route through our Cloudflare Worker which sets the right headers.
+const COLLECTR_BASE = 'https://fleng-poketrack.jenniferduong-a.workers.dev/collectr'
+
 function Collection() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [filter, setFilter] = useState('')
@@ -185,7 +189,7 @@ function Collection() {
       }
 
       setRefreshProgress('Listing collections...')
-      const colsResp = await apiGet(`https://api-v2.getcollectr.com/accounts/${ownerUuid}/collections`)
+      const colsResp = await apiGet(`${COLLECTR_BASE}/accounts/${ownerUuid}/collections`)
       const cols = colsResp.data || []
 
       const grouped = {}
@@ -200,7 +204,7 @@ function Collection() {
           // Collectr returns newest-first when sortType=dateAdded&sortOrder=DESC.
           // The response itself has no date field, but user_owned_product_id is
           // monotonic with the sort, so the Dashboard sorts cross-collection by it.
-          const url = `https://api-v2.getcollectr.com/collections/${ownerUuid}/products?limit=${pageSize}&offset=${off}&unstackedView=true&sortType=dateAdded&sortOrder=DESC${cidParam}`
+          const url = `${COLLECTR_BASE}/collections/${ownerUuid}/products?limit=${pageSize}&offset=${off}&unstackedView=true&sortType=dateAdded&sortOrder=DESC${cidParam}`
           const j = await apiGet(url)
           const batch = j.data || []
           items.push(...batch)
